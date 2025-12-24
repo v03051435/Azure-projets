@@ -13,7 +13,10 @@ variables:
   apiImageName: repos-api
   apiPath: AzureWebAp
 
-  imageTag: $[eq(variables['Build.SourceBranchName'], 'main') ? 'prod' : 'testbed']
+  ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
+    imageTag: prod
+  ${{ if eq(variables['Build.SourceBranchName'], 'testbed') }}:
+    imageTag: testbed
 
 steps:
 - checkout: self
@@ -30,6 +33,5 @@ steps:
       echo "Tag: $(imageTag)"
 
       az acr login --name $(acrName)
-
       docker build -t $(acrLoginServer)/$(apiImageName):$(imageTag) ./$(apiPath)
       docker push $(acrLoginServer)/$(apiImageName):$(imageTag)

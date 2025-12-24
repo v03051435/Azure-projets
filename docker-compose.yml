@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: ./AzureWebAp
+    container_name: demo-api
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./AzureReactApp
+      args:
+        VITE_API_BASE_URL: https://demo-api.whitebay-41407b86.francecentral.azurecontainerapps.io/
+    container_name: demo-web
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+    restart: unless-stopped

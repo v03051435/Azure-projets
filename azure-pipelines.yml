@@ -10,28 +10,89 @@ pool:
 variables:
   acrName: yhaodevopsacr
   acrLoginServer: yhaodevopsacr.azurecr.io
+  resourceGroup: rg-devops-demo
+
   apiImageName: repos-api
+  webImageName: repos-web
+
   apiPath: AzureWebAp
+  webPath: AzureReactApp
 
+  # branch -> env mapping
   ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
-    imageTag: prod
+    envName: prod
+    apiAppName: demo-api-prod
+    webAppName: demo-web-prod
+
   ${{ if eq(variables['Build.SourceBranchName'], 'testbed') }}:
-    imageTag: testbed
+    envName: testbed
+    apiAppName: demo-api-testbed
+    webAppName: demo-web-testbed
 
-steps:
-- checkout: self
+stages:
 
-- task: AzureCLI@2
-  displayName: "Build & Push API image to ACR"
-  inputs:
-    azureSubscription: "sc-azure-rm"
-    scriptType: bash
-    scriptLocation: inlineScript
-    inlineScript: |
-      set -e
-      echo "Branch: $(Build.SourceBranchName)"
-      echo "Tag: $(imageTag)"
+# =====================
+# STAGE 1 - BUILD
+# =====================
+- stage: build
+  displayName: Build & Push Images
+  jobs:
+  - job: build_images
+    displayName: Build API & Web
+    steps:
+    - checkout: self
 
-      az acr login --name $(acrName)
-      docker build -t $(acrLoginServer)/$(apiImageName):$(imageTag) ./$(apiPath)
-      docker push $(acrLoginServer)/$(apiImageName):$(imageTag)
+    - task: AzureCLI@2
+      displayName: Build & Push API + Web
+      inputs:
+        azureSubscription: sc-azure-rm
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          echo "Environment: $(envName)"
+
+          az acr login --name $(acrName)
+
+          echo "=== API ==="
+          docker build \
+            -t $(acrLoginServer)/$(apiImageName):$(envName) \
+            ./$(apiPath)
+          docker push $(acrLoginServer)/$(apiImageName):$(envName)
+
+          echo "=== WEB ==="
+          docker build \
+            -t $(acrLoginServer)/$(webImageName):$(envName) \
+            ./$(webPath)
+          docker push $(acrLoginServer)/$(webImageName):$(envName)
+
+# =====================
+# STAGE 2 - DEPLOY
+# =====================
+- stage: deploy
+  displayName: Deploy to Container Apps
+  dependsOn: build
+  jobs:
+  - job: deploy_apps
+    displayName: Deploy API & Web
+    steps:
+    - task: AzureCLI@2
+      displayName: Update Container Apps
+      inputs:
+        azureSubscription: sc-azure-rm
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          echo "Deploying to environment: $(envName)"
+
+          echo "Updating API..."
+          az containerapp update \
+            --name $(apiAppName) \
+            --resource-group $(resourceGroup) \
+            --image $(acrLoginServer)/$(apiImageName):$(envName)
+
+          echo "Updating WEB..."
+          az containerapp update \
+            --name $(webAppName) \
+            --resource-group $(resourceGroup) \
+            --image $(acrLoginServer)/$(webImageName):$(envName)

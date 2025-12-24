@@ -7,10 +7,29 @@ trigger:
 pool:
   vmImage: ubuntu-latest
 
+variables:
+  acrName: yhaodevopsacr
+  acrLoginServer: yhaodevopsacr.azurecr.io
+  apiImageName: repos-api
+  apiPath: AzureWebAp
+
+  imageTag: $[eq(variables['Build.SourceBranchName'], 'main') ? 'prod' : 'testbed']
+
 steps:
-- script: |
-    echo "Pipeline is running"
-    echo "Branch name: $(Build.SourceBranchName)"
-    echo "Commit: $(Build.SourceVersion)"
-    ls -la
-  displayName: "Sanity check"
+- checkout: self
+
+- task: AzureCLI@2
+  displayName: "Build & Push API image to ACR"
+  inputs:
+    azureSubscription: "sc-azure-rm"
+    scriptType: bash
+    scriptLocation: inlineScript
+    inlineScript: |
+      set -e
+      echo "Branch: $(Build.SourceBranchName)"
+      echo "Tag: $(imageTag)"
+
+      az acr login --name $(acrName)
+
+      docker build -t $(acrLoginServer)/$(apiImageName):$(imageTag) ./$(apiPath)
+      docker push $(acrLoginServer)/$(apiImageName):$(imageTag)

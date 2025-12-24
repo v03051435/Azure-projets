@@ -15,7 +15,7 @@ namespace AzureWebAp.Controllers
                 data.Add(new DataObject
                 {
                     Id = i,
-                    Name = $"Item {i}",
+                    Name = $"Item {i} Production",
                     Description = $"This is the description for item {i}."
                 });
             }

@@ -18,8 +18,6 @@ variables:
   apiPath: AzureWebAp
   webPath: AzureReactApp
   
-  VITE_API_BASE_URL: https://init
-
   # branch -> env mapping
   ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
     envName: prod

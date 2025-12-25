@@ -28,7 +28,7 @@ namespace AzureWebAp.Controllers
                 {
                     Id = i,
                     Name = $"Env : {envName}, Item {i}",
-                    Description = $"This is the description for item {i}."
+                    Description = $"Desription {i}."
                 });
             }
             return Ok(data);

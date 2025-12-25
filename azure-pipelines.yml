@@ -147,16 +147,3 @@ stages:
               --ingress external \
               --target-port 80
           fi
-
-          # 1. 取 Container App 的 principalId
-          PRINCIPAL_ID=$(az containerapp show \
-          --name $(apiAppName) \
-          --resource-group $(resourceGroup) \
-          --query identity.principalId \
-          -o tsv)
-
-          # 2. 给这个 identity 授权 AcrPull
-          az role assignment create \
-            --assignee $PRINCIPAL_ID \
-            --role AcrPull \
-            --scope /subscriptions/$(az account show --query id -o tsv)/resourceGroups/$(resourceGroup)/providers/Microsoft.ContainerRegistry/registries/$(acrName)

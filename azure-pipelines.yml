@@ -12,20 +12,21 @@ variables:
   acrLoginServer: yhaodevopsacr.azurecr.io
   resourceGroup: rg-devops-demo
 
+  containerEnvName: managedEnvironment-rgdevopsdemo-9049   # 👈 已存在的 Container Apps Environment
+
   apiImageName: repos-api
   webImageName: repos-web
 
   apiPath: AzureWebAp
   webPath: AzureReactApp
-  
-  # branch -> env mapping
+
+  # ===== branch -> env mapping =====
   ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
     envName: prod
     apiAppName: demo-api-prod
     webAppName: demo-web-prod
     VITE_API_BASE_URL: https://demo-api-prod.whitebay-41407b86.francecentral.azurecontainerapps.io
     ASPNETCORE_ENVIRONMENT: Production
-    VITE_ENV: Production
 
   ${{ if eq(variables['Build.SourceBranchName'], 'testbed') }}:
     envName: testbed
@@ -33,7 +34,6 @@ variables:
     webAppName: demo-web-testbed
     VITE_API_BASE_URL: https://demo-api-testbed.whitebay-41407b86.francecentral.azurecontainerapps.io
     ASPNETCORE_ENVIRONMENT: Testbed
-    VITE_ENV: Testbed
 
 stages:
 
@@ -60,20 +60,21 @@ stages:
 
           az acr login --name $(acrName)
 
-          echo "=== API ==="
+          echo "=== API BUILD ==="
           docker build \
             -t $(acrLoginServer)/$(apiImageName):$(envName) \
             ./$(apiPath)
+
           docker push $(acrLoginServer)/$(apiImageName):$(envName)
 
-          echo "=== WEB ==="
-          echo "VITE_API_BASE_URL passed to docker = $(VITE_API_BASE_URL)"
-          
+          echo "=== WEB BUILD ==="
+          echo "VITE_API_BASE_URL=$(VITE_API_BASE_URL)"
+
           docker build \
             --build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) \
-            --build-arg VITE_ENV=$(VITE_ENV) \
             -t $(acrLoginServer)/$(webImageName):$(envName) \
             ./$(webPath)
+
           docker push $(acrLoginServer)/$(webImageName):$(envName)
 
 # =====================
@@ -84,26 +85,60 @@ stages:
   dependsOn: build
   jobs:
   - job: deploy_apps
-    displayName: Deploy API & Web
+    displayName: Create or Update API & Web
     steps:
     - task: AzureCLI@2
-      displayName: Update Container Apps
+      displayName: Deploy API & Web Container Apps
       inputs:
         azureSubscription: sc-azure-rm
         scriptType: bash
         scriptLocation: inlineScript
         inlineScript: |
-          echo "Deploying to environment: $(envName)"
+          set -e
+          echo "Deploying environment: $(envName)"
 
-          echo "Updating API..."
-          az containerapp update \
+          # ========= API =========
+          if az containerapp show \
             --name $(apiAppName) \
-            --resource-group $(resourceGroup) \
-            --image $(acrLoginServer)/$(apiImageName):$(envName) \
-            --set-env-vars ASPNETCORE_ENVIRONMENT="$(ASPNETCORE_ENVIRONMENT)"
+            --resource-group $(resourceGroup) > /dev/null 2>&1; then
 
-          echo "Updating WEB..."
-          az containerapp update \
+            echo "API exists → updating"
+            az containerapp update \
+              --name $(apiAppName) \
+              --resource-group $(resourceGroup) \
+              --image $(acrLoginServer)/$(apiImageName):$(envName) \
+              --set-env-vars ASPNETCORE_ENVIRONMENT="$(ASPNETCORE_ENVIRONMENT)"
+
+          else
+            echo "API not found → creating"
+            az containerapp create \
+              --name $(apiAppName) \
+              --resource-group $(resourceGroup) \
+              --environment $(containerEnvName) \
+              --image $(acrLoginServer)/$(apiImageName):$(envName) \
+              --ingress external \
+              --target-port 8080 \
+              --set-env-vars ASPNETCORE_ENVIRONMENT="$(ASPNETCORE_ENVIRONMENT)"
+          fi
+
+          # ========= WEB =========
+          if az containerapp show \
             --name $(webAppName) \
-            --resource-group $(resourceGroup) \
-            --image $(acrLoginServer)/$(webImageName):$(envName)
+            --resource-group $(resourceGroup) > /dev/null 2>&1; then
+
+            echo "WEB exists → updating"
+            az containerapp update \
+              --name $(webAppName) \
+              --resource-group $(resourceGroup) \
+              --image $(acrLoginServer)/$(webImageName):$(envName)
+
+          else
+            echo "WEB not found → creating"
+            az containerapp create \
+              --name $(webAppName) \
+              --resource-group $(resourceGroup) \
+              --environment $(containerEnvName) \
+              --image $(acrLoginServer)/$(webImageName):$(envName) \
+              --ingress external \
+              --target-port 80
+          fi

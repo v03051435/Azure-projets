@@ -118,7 +118,8 @@ stages:
               --image $(acrLoginServer)/$(apiImageName):$(envName) \
               --ingress external \
               --target-port 8080 \
-              --set-env-vars ASPNETCORE_ENVIRONMENT="$(ASPNETCORE_ENVIRONMENT)"
+              --env-vars ASPNETCORE_ENVIRONMENT="$(ASPNETCORE_ENVIRONMENT)"
+
           fi
 
           # ========= WEB =========

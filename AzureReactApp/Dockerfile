@@ -10,6 +10,8 @@ COPY public ./public
 
 ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ARG VITE_ENV
+ENV VITE_ENV=$VITE_ENV
 
 RUN npm install
 RUN npm run build

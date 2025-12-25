@@ -24,12 +24,16 @@ variables:
     apiAppName: demo-api-prod
     webAppName: demo-web-prod
     VITE_API_BASE_URL: https://demo-api-prod.whitebay-41407b86.francecentral.azurecontainerapps.io
+    ASPNETCORE_ENVIRONMENT: Production
+    VITE_ENV: Production
 
   ${{ if eq(variables['Build.SourceBranchName'], 'testbed') }}:
     envName: testbed
     apiAppName: demo-api-testbed
     webAppName: demo-web-testbed
     VITE_API_BASE_URL: https://demo-api-testbed.whitebay-41407b86.francecentral.azurecontainerapps.io
+    ASPNETCORE_ENVIRONMENT: Testbed
+    VITE_ENV: Testbed
 
 stages:
 
@@ -67,6 +71,7 @@ stages:
           
           docker build \
             --build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) \
+            --build-arg VITE_ENV=$(VITE_ENV) \
             -t $(acrLoginServer)/$(webImageName):$(envName) \
             ./$(webPath)
           docker push $(acrLoginServer)/$(webImageName):$(envName)
@@ -94,10 +99,12 @@ stages:
           az containerapp update \
             --name $(apiAppName) \
             --resource-group $(resourceGroup) \
-            --image $(acrLoginServer)/$(apiImageName):$(envName)
+            --image $(acrLoginServer)/$(apiImageName):$(envName) \
+            --env-vars ASPNETCORE_ENVIRONMENT=$(ASPNETCORE_ENVIRONMENT)
 
           echo "Updating WEB..."
           az containerapp update \
             --name $(webAppName) \
             --resource-group $(resourceGroup) \
-            --image $(acrLoginServer)/$(webImageName):$(envName)
+            --image $(acrLoginServer)/$(webImageName):$(envName) \
+            --env-vars VITE_API_BASE_URL=$(VITE_API_BASE_URL) VITE_ENV=$(VITE_ENV)

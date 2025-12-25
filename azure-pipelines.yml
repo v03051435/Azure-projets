@@ -116,8 +116,6 @@ stages:
               --resource-group $(resourceGroup) \
               --environment $(containerEnvName) \
               --image $(acrLoginServer)/$(apiImageName):$(envName) \
-              --registry-server $(acrLoginServer) \
-              --registry-identity system \
               --ingress external \
               --target-port 8080 \
               --env-vars ASPNETCORE_ENVIRONMENT="$(ASPNETCORE_ENVIRONMENT)"
@@ -142,9 +140,6 @@ stages:
               --resource-group $(resourceGroup) \
               --environment $(containerEnvName) \
               --image $(acrLoginServer)/$(webImageName):$(envName) \
-              --registry-server $(acrLoginServer) \
-              --registry-identity system \
               --ingress external \
               --target-port 80
           fi
-          

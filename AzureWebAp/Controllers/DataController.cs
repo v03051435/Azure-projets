@@ -9,13 +9,14 @@ namespace AzureWebAp.Controllers
         [HttpGet]
         public IActionResult GetData()
         {
+            var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
             var data = new List<DataObject>();
             for (int i = 1; i <= 10; i++)
             {
                 data.Add(new DataObject
                 {
                     Id = i,
-                    Name = $"Item {i} Production",
+                    Name = $"Env : {env}, Item {i}",
                     Description = $"This is the description for item {i}."
                 });
             }

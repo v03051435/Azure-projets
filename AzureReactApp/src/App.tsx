@@ -40,7 +40,7 @@ function App() {
   return (
     <>
       <section>
-        <h2>Data from API</h2>
+        <h2>Data from API (environment: {import.meta.env.VITE_ENV ?? import.meta.env.MODE})</h2>
 
         {loading && <p>Loading data...</p>}
         {error && <p className="error">Error: {error}</p>}

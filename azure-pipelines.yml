@@ -106,5 +106,4 @@ stages:
           az containerapp update \
             --name $(webAppName) \
             --resource-group $(resourceGroup) \
-            --image $(acrLoginServer)/$(webImageName):$(envName) \
-            --set-env-vars VITE_API_BASE_URL="$(VITE_API_BASE_URL)" VITE_ENV="$(VITE_ENV)"
+            --image $(acrLoginServer)/$(webImageName):$(envName)

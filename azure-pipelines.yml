@@ -112,13 +112,15 @@ stages:
           else
             echo "API not found → creating"
             az containerapp create \
-              --name $(apiAppName) \
-              --resource-group $(resourceGroup) \
-              --environment $(containerEnvName) \
-              --image $(acrLoginServer)/$(apiImageName):$(envName) \
-              --ingress external \
-              --target-port 8080 \
-              --env-vars ASPNETCORE_ENVIRONMENT="$(ASPNETCORE_ENVIRONMENT)"
+          --name $(apiAppName) \
+          --resource-group $(resourceGroup) \
+          --environment $(containerEnvName) \
+          --image $(acrLoginServer)/$(apiImageName):$(envName) \
+          --ingress external \
+          --target-port 8080 \
+          --registry-server $(acrLoginServer) \
+          --registry-identity system \
+          --env-vars ASPNETCORE_ENVIRONMENT="$(ASPNETCORE_ENVIRONMENT)"
 
           fi
 
@@ -142,4 +144,7 @@ stages:
               --image $(acrLoginServer)/$(webImageName):$(envName) \
               --ingress external \
               --target-port 80
+              --registry-server $(acrLoginServer) \
+              --registry-identity system \
+
           fi

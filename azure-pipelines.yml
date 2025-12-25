@@ -43,39 +43,39 @@ stages:
 - stage: build
   displayName: Build & Push Images
   jobs:
-  - job: build_images
-    displayName: Build API & Web
-    steps:
-    - checkout: self
+    - job: build_images
+      displayName: Build API & Web
+      steps:
+        - checkout: self
 
-    - task: AzureCLI@2
-      displayName: Build & Push API + Web
-      inputs:
-        azureSubscription: sc-azure-rm
-        scriptType: bash
-        scriptLocation: inlineScript
-        inlineScript: |
-          set -e
-          echo "Environment: $(envName)"
+        - task: AzureCLI@2
+          displayName: Build & Push API + Web
+          inputs:
+            azureSubscription: sc-azure-rm
+            scriptType: bash
+            scriptLocation: inlineScript
+            inlineScript: |
+              set -e
+              echo "Environment: $(envName)"
 
-          az acr login --name $(acrName)
+              az acr login --name $(acrName)
 
-          echo "=== API BUILD ==="
-          docker build \
-            -t $(acrLoginServer)/$(apiImageName):$(envName) \
-            ./$(apiPath)
+              echo "=== API BUILD ==="
+              docker build \
+                -t $(acrLoginServer)/$(apiImageName):$(envName) \
+                ./$(apiPath)
 
-          docker push $(acrLoginServer)/$(apiImageName):$(envName)
+              docker push $(acrLoginServer)/$(apiImageName):$(envName)
 
-          echo "=== WEB BUILD ==="
-          echo "VITE_API_BASE_URL=$(VITE_API_BASE_URL)"
+              echo "=== WEB BUILD ==="
+              echo "VITE_API_BASE_URL=$(VITE_API_BASE_URL)"
 
-          docker build \
-            --build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) \
-            -t $(acrLoginServer)/$(webImageName):$(envName) \
-            ./$(webPath)
+              docker build \
+                --build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) \
+                -t $(acrLoginServer)/$(webImageName):$(envName) \
+                ./$(webPath)
 
-          docker push $(acrLoginServer)/$(webImageName):$(envName)
+              docker push $(acrLoginServer)/$(webImageName):$(envName)
 
 # =====================
 # STAGE 2 - DEPLOY
@@ -84,67 +84,65 @@ stages:
   displayName: Deploy to Container Apps
   dependsOn: build
   jobs:
-  - job: deploy_apps
-    displayName: Create or Update API & Web
-    steps:
-    - task: AzureCLI@2
-      displayName: Deploy API & Web Container Apps
-      inputs:
-        azureSubscription: sc-azure-rm
-        scriptType: bash
-        scriptLocation: inlineScript
-        inlineScript: |
-          set -e
-          echo "Deploying environment: $(envName)"
+    - job: deploy_apps
+      displayName: Create or Update API & Web
+      steps:
+        - task: AzureCLI@2
+          displayName: Deploy API & Web Container Apps
+          inputs:
+            azureSubscription: sc-azure-rm
+            scriptType: bash
+            scriptLocation: inlineScript
+            inlineScript: |
+              set -e
+              echo "Deploying environment: $(envName)"
 
-          # ========= API =========
-          if az containerapp show \
-            --name $(apiAppName) \
-            --resource-group $(resourceGroup) > /dev/null 2>&1; then
+              # ========= API =========
+              if az containerapp show \
+                --name $(apiAppName) \
+                --resource-group $(resourceGroup) > /dev/null 2>&1; then
 
-            echo "API exists → updating"
-            az containerapp update \
-              --name $(apiAppName) \
-              --resource-group $(resourceGroup) \
-              --image $(acrLoginServer)/$(apiImageName):$(envName) \
-              --set-env-vars ASPNETCORE_ENVIRONMENT="$(ASPNETCORE_ENVIRONMENT)"
+                echo "API exists → updating"
+                az containerapp update \
+                  --name $(apiAppName) \
+                  --resource-group $(resourceGroup) \
+                  --image $(acrLoginServer)/$(apiImageName):$(envName) \
+                  --set-env-vars ASPNETCORE_ENVIRONMENT=$(ASPNETCORE_ENVIRONMENT)
 
-          else
-            echo "API not found → creating"
-            az containerapp create \
-          --name $(apiAppName) \
-          --resource-group $(resourceGroup) \
-          --environment $(containerEnvName) \
-          --image $(acrLoginServer)/$(apiImageName):$(envName) \
-          --ingress external \
-          --target-port 8080 \
-          --registry-server $(acrLoginServer) \
-          --registry-identity system \
-          --env-vars ASPNETCORE_ENVIRONMENT="$(ASPNETCORE_ENVIRONMENT)"
+              else
+                echo "API not found → creating"
+                az containerapp create \
+                  --name $(apiAppName) \
+                  --resource-group $(resourceGroup) \
+                  --environment $(containerEnvName) \
+                  --image $(acrLoginServer)/$(apiImageName):$(envName) \
+                  --registry-server $(acrLoginServer) \
+                  --registry-identity system \
+                  --ingress external \
+                  --target-port 8080 \
+                  --env-vars ASPNETCORE_ENVIRONMENT=$(ASPNETCORE_ENVIRONMENT)
+              fi
 
-          fi
+              # ========= WEB =========
+              if az containerapp show \
+                --name $(webAppName) \
+                --resource-group $(resourceGroup) > /dev/null 2>&1; then
 
-          # ========= WEB =========
-          if az containerapp show \
-            --name $(webAppName) \
-            --resource-group $(resourceGroup) > /dev/null 2>&1; then
+                echo "WEB exists → updating"
+                az containerapp update \
+                  --name $(webAppName) \
+                  --resource-group $(resourceGroup) \
+                  --image $(acrLoginServer)/$(webImageName):$(envName)
 
-            echo "WEB exists → updating"
-            az containerapp update \
-              --name $(webAppName) \
-              --resource-group $(resourceGroup) \
-              --image $(acrLoginServer)/$(webImageName):$(envName)
-
-          else
-            echo "WEB not found → creating"
-            az containerapp create \
-              --name $(webAppName) \
-              --resource-group $(resourceGroup) \
-              --environment $(containerEnvName) \
-              --image $(acrLoginServer)/$(webImageName):$(envName) \
-              --ingress external \
-              --target-port 80
-              --registry-server $(acrLoginServer) \
-              --registry-identity system \
-
-          fi
+              else
+                echo "WEB not found → creating"
+                az containerapp create \
+                  --name $(webAppName) \
+                  --resource-group $(resourceGroup) \
+                  --environment $(containerEnvName) \
+                  --image $(acrLoginServer)/$(webImageName):$(envName) \
+                  --registry-server $(acrLoginServer) \
+                  --registry-identity system \
+                  --ingress external \
+                  --target-port 80
+              fi

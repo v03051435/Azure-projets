@@ -23,7 +23,7 @@ variables:
   # ===== versioning =====
   gitSha: $(Build.SourceVersion)
   shortSha: $[substring(variables['Build.SourceVersion'], 0, 7)]
-  dateTag: $[format('{0:yyyy.MM.dd}', pipeline.startTime)]
+  dateTag: build-$(Build.BuildId)
 
   # ===== branch -> env mapping =====
   ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:

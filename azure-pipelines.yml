@@ -92,7 +92,7 @@ stages:
         # ===== Release Notes =====
         - script: |
             echo "## Release Notes" > release-notes.md
-            git log HEAD~10..HEAD --pretty=format:"- %s (%an)" >> release-notes.md
+            git log -1 --pretty=format:"- %s (%an)" >> release-notes.md
           displayName: Generate Release Notes
 
         - task: PublishPipelineArtifact@1

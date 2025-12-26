@@ -14,7 +14,6 @@ variables:
   gitSha: $(Build.SourceVersion)
   shortSha: $[substring(variables['Build.SourceVersion'], 0, 7)]
   imageTag: git-$(shortSha)
-  dateTag: build-$(Build.BuildId)
 
 stages:
 
@@ -25,6 +24,7 @@ stages:
   displayName: Build Images
   jobs:
   - job: build
+    displayName: Build & Push Images
     pool:
       vmImage: ubuntu-latest
     steps:
@@ -40,62 +40,63 @@ stages:
           set -e
           az acr login --name yhaodevopsacr
 
-          # API
+          echo "Building API image $(imageTag)"
           docker build \
-            -t $(acrLoginServer)/$(apiImageName):git-$(shortSha) \
-            -t $(acrLoginServer)/$(apiImageName):$(envName) \
-            -t $(acrLoginServer)/$(apiImageName):$(dateTag) \
+            -t $(acrLoginServer)/$(apiImageName):$(imageTag) \
             ./$(apiPath)
-          docker push $acrLoginServer/$apiImageName:git-$(shortSha)
+          docker push $(acrLoginServer)/$(apiImageName):$(imageTag)
 
-          # WEB (不传环境参数！)
+          echo "Building WEB image $(imageTag)"
           docker build \
-            -t $acrLoginServer/$webImageName:git-$(shortSha) \
-            -t $acrLoginServer/$webImageName:$(envName) \
-            -t $acrLoginServer/$webImageName:$(dateTag) \
+            -t $(acrLoginServer)/$(webImageName):$(imageTag) \
             ./$(webPath)
-          docker push $acrLoginServer/$webImageName:git-$(shortSha)
+          docker push $(acrLoginServer)/$(webImageName):$(imageTag)
 
 # =====================
 # DEPLOY TEST
 # =====================
 - stage: deploy_test
+  displayName: Deploy to TESTBED
   dependsOn: build
   jobs:
-  - template: templates/deploy-containerapp.yml
-    parameters:
-      environment: Testbed
-      imageTag: git-$(shortSha)
-      apiAppName: demo-api-testbed
-      webAppName: demo-web-testbed
-      apiBaseUrl: https://demo-api-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io
+  - job: deploy
+    displayName: Deploy Container Apps (Testbed)
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - template: templates/deploy-containerapp.yml
+      parameters:
+        environment: Testbed
+        imageTag: $(imageTag)
+        apiAppName: demo-api-testbed
+        webAppName: demo-web-testbed
+        apiBaseUrl: https://demo-api-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io
 
-  # ---------- GENERATE IMAGE INFO (PROMOTE 核心) ----------
-  - bash: |
-      mkdir -p image-info
-      echo "{
-        \"apiImage\": \"$(acrLoginServer)/$(apiImageName):$(imageTag)\",
-        \"webImage\": \"$(acrLoginServer)/$(webImageName):$(imageTag)\",
-        \"tag\": \"$(imageTag)\",
-        \"commit\": \"$(Build.SourceVersion)\",
-        \"buildId\": \"$(Build.BuildId)\"
-      }" > image-info/image.json
+    - bash: |
+        mkdir -p image-info
+        echo "{
+          \"apiImage\": \"$(acrLoginServer)/$(apiImageName):$(imageTag)\",
+          \"webImage\": \"$(acrLoginServer)/$(webImageName):$(imageTag)\",
+          \"tag\": \"$(imageTag)\",
+          \"commit\": \"$(Build.SourceVersion)\",
+          \"buildId\": \"$(Build.BuildId)\"
+        }" > image-info/image.json
 
-      echo "===== IMAGE INFO ====="
-      cat image-info/image.json
-    displayName: Generate image info artifact
+        echo "===== IMAGE INFO ====="
+        cat image-info/image.json
+      displayName: Generate image info artifact
 
-  # ---------- PUBLISH ARTIFACT ----------
-  - task: PublishPipelineArtifact@1
-    displayName: Publish image info for PROMOTE
-    inputs:
-      targetPath: image-info
-      artifact: image-info
+    - task: PublishPipelineArtifact@1
+      displayName: Publish image info for PROMOTE
+      inputs:
+        targetPath: image-info
+        artifact: image-info
 
 # =====================
 # SMOKE TEST
 # =====================
 - stage: smoke_test
+  displayName: Smoke Test
   dependsOn: deploy_test
   jobs:
   - job: smoke
@@ -110,26 +111,31 @@ stages:
         scriptLocation: inlineScript
         inlineScript: |
           set -e
-          echo "Verifying API Container App image contains tag: $(imageTag)"
-          api_image=$(az containerapp show --name demo-api-testbed --resource-group rg-devops-demo --query configuration.image -o tsv)
+
+          echo "Checking API image..."
+          api_image=$(az containerapp show \
+            --name demo-api-testbed \
+            --resource-group rg-devops-demo \
+            --query configuration.image -o tsv)
           echo "API image: $api_image"
-          echo "$api_image" | grep "$(imageTag)" || (echo "ERROR: API not updated to tag $(imageTag)" && exit 1)
+          echo "$api_image" | grep "$(imageTag)"
 
-          echo "Verifying WEB Container App image contains tag: $(imageTag)"
-          web_image=$(az containerapp show --name demo-web-testbed --resource-group rg-devops-demo --query configuration.image -o tsv)
+          echo "Checking WEB image..."
+          web_image=$(az containerapp show \
+            --name demo-web-testbed \
+            --resource-group rg-devops-demo \
+            --query configuration.image -o tsv)
           echo "WEB image: $web_image"
-          echo "$web_image" | grep "$(imageTag)" || (echo "ERROR: WEB not updated to tag $(imageTag)" && exit 1)
+          echo "$web_image" | grep "$(imageTag)"
 
-          echo "Testing web endpoint (expect HTTP 200)..."
+          echo "Checking web endpoint..."
           for i in 1 2 3; do
-            status=$(curl -s -o /dev/null -w "%{http_code}" https://demo-web-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io || true)
+            status=$(curl -s -o /dev/null -w "%{http_code}" \
+              https://demo-web-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io || true)
             echo "HTTP code: $status"
-            if [ "$status" = "200" ]; then
-              echo "Web endpoint is reachable"
-              exit 0
-            fi
+            [ "$status" = "200" ] && exit 0
             sleep 5
           done
-          echo "ERROR: web endpoint not responding with 200" && exit 1
 
-
+          echo "ERROR: web endpoint not responding"
+          exit 1

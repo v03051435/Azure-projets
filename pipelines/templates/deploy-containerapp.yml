@@ -1,42 +1,92 @@
 parameters:
-  environment: 'Testbed/Production'
-  imageTag: ''
-  apiAppName: 'demo-api-prod/demo-api-testbed'
-  webAppName: 'demo-web-prod/demo-web-testbed'
-  apiBaseUrl: 'https://demo-api-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io/https://demo-api-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io'
+  - name: environment
+    type: string
+    default: ''
+  - name: imageTag
+    type: string
+    default: ''
+  - name: apiAppName
+    type: string
+    default: ''
+  - name: webAppName
+    type: string
+    default: ''
+  - name: apiBaseUrl
+    type: string
+    default: ''
 
-steps:
-- task: AzureCLI@2
-  displayName: Deploy API Container App
-  inputs:
-    azureSubscription: sc-azure-rm
-    scriptType: bash
-    scriptLocation: inlineScript
-    inlineScript: |
-      set -e
-      echo "Deploying API $(apiAppName) with tag $(imageTag)"
+jobs:
+- job: deploy
+  displayName: Deploy to ${{ parameters.environment }}
+  pool:
+    vmImage: ubuntu-latest
+  steps:
+  - task: AzureCLI@2
+    displayName: Deploy API & WEB
+    inputs:
+      azureSubscription: sc-azure-rm
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -e
+        echo "Deploying tag: ${{ parameters.imageTag }}"
 
-      az containerapp update \
-        --name $(apiAppName) \
-        --resource-group rg-devops-demo \
-        --image yhaodevopsacr.azurecr.io/repos-api:$(imageTag) \
-        --set-env-vars \
-          ASPNETCORE_ENVIRONMENT=$(environment)
+        # Verify image tag exists in ACR before updating
+        echo "Checking ACR for tag '${{ parameters.imageTag }}'..."
+        api_exists=$(az acr repository show-tags --name yhaodevopsacr --repository repos-api --query "contains(@, '${{ parameters.imageTag }}')" -o tsv)
+        if [ "$api_exists" != "true" ]; then
+          echo "ERROR: API image tag '${{ parameters.imageTag }}' not found in registry repos-api"
+          az acr repository show-tags --name yhaodevopsacr --repository repos-api --top 50 || true
+          exit 1
+        fi
+        web_exists=$(az acr repository show-tags --name yhaodevopsacr --repository repos-web --query "contains(@, '${{ parameters.imageTag }}')" -o tsv)
+        if [ "$web_exists" != "true" ]; then
+          echo "ERROR: WEB image tag '${{ parameters.imageTag }}' not found in registry repos-web"
+          az acr repository show-tags --name yhaodevopsacr --repository repos-web --top 50 || true
+          exit 1
+        fi
 
-- task: AzureCLI@2
-  displayName: Deploy WEB Container App
-  inputs:
-    azureSubscription: sc-azure-rm
-    scriptType: bash
-    scriptLocation: inlineScript
-    inlineScript: |
-      set -e
-      echo "Deploying WEB $(webAppName) with tag $(imageTag)"
+        # Verify Container Apps can pull from ACR (AcrPull role)
+        rg=rg-devops-demo
+        registryId=$(az acr show --name yhaodevopsacr --resource-group $rg --query id -o tsv)
 
-      az containerapp update \
-        --name $(webAppName) \
-        --resource-group rg-devops-demo \
-        --image yhaodevopsacr.azurecr.io/repos-web:$(imageTag) \
-        --set-env-vars \
-          API_BASE_URL=$(apiBaseUrl) \
-          VITE_ENV=$(environment)
+        # API identity
+        api_principal=$(az containerapp show --name ${{ parameters.apiAppName }} --resource-group $rg --query identity.principalId -o tsv || true)
+        if [ -z "$api_principal" ]; then
+          echo "WARNING: API Container App has no managed identity; ensure registry credentials or system assigned identity with AcrPull"
+        else
+          api_assigned=$(az role assignment list --assignee "$api_principal" --scope "$registryId" --query "[?roleDefinitionName=='AcrPull'] | length(@)" -o tsv)
+          if [ "$api_assigned" = "0" ]; then
+            echo "ERROR: API Container App principal '$api_principal' lacks AcrPull on registry. Run: az role assignment create --assignee $api_principal --role AcrPull --scope $registryId"
+            exit 1
+          fi
+        fi
+
+        # WEB identity
+        web_principal=$(az containerapp show --name ${{ parameters.webAppName }} --resource-group $rg --query identity.principalId -o tsv || true)
+        if [ -z "$web_principal" ]; then
+          echo "WARNING: WEB Container App has no managed identity; ensure registry credentials or system assigned identity with AcrPull"
+        else
+          web_assigned=$(az role assignment list --assignee "$web_principal" --scope "$registryId" --query "[?roleDefinitionName=='AcrPull'] | length(@)" -o tsv)
+          if [ "$web_assigned" = "0" ]; then
+            echo "ERROR: WEB Container App principal '$web_principal' lacks AcrPull on registry. Run: az role assignment create --assignee $web_principal --role AcrPull --scope $registryId"
+            exit 1
+          fi
+        fi
+
+        # ===== API =====
+        az containerapp update \
+          --name ${{ parameters.apiAppName }} \
+          --resource-group $rg \
+          --image yhaodevopsacr.azurecr.io/repos-api:${{ parameters.imageTag }} \
+          --set-env-vars \
+            ASPNETCORE_ENVIRONMENT=${{ parameters.environment }}
+
+        # ===== WEB =====
+        az containerapp update \
+          --name ${{ parameters.webAppName }} \
+          --resource-group $rg \
+          --image yhaodevopsacr.azurecr.io/repos-web:${{ parameters.imageTag }} \
+          --set-env-vars \
+            API_BASE_URL=${{ parameters.apiBaseUrl }} \
+            VITE_ENV=${{ parameters.environment }}

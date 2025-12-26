@@ -40,6 +40,12 @@ function App() {
   return (
     <>
       <section>
+        <section className="header">
+          <h1>Azure React App</h1>
+          <p className="muted">
+            Version 1.0.0 - Built with Vite and React
+          </p>
+        </section>
         <h2>Data from API (environment: {import.meta.env.VITE_ENV ?? import.meta.env.MODE})</h2>
 
         {loading && <p>Loading data...</p>}

@@ -20,6 +20,11 @@ variables:
   apiPath: AzureWebAp
   webPath: AzureReactApp
 
+  # ===== versioning =====
+  gitSha: $(Build.SourceVersion)
+  shortSha: $[substring(variables['Build.SourceVersion'], 0, 7)]
+  dateTag: $[format('{0:yyyy.MM.dd}', pipeline.startTime)]
+
   # ===== branch -> env mapping =====
   ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
     envName: prod
@@ -65,9 +70,11 @@ stages:
               echo "=== API BUILD ==="
               docker build \
                 -t $(acrLoginServer)/$(apiImageName):$(envName) \
+                -t $(acrLoginServer)/$(apiImageName):git-$(shortSha) \
+                -t $(acrLoginServer)/$(apiImageName):$(dateTag) \
                 ./$(apiPath)
 
-              docker push $(acrLoginServer)/$(apiImageName):$(envName)
+              docker push $(acrLoginServer)/$(apiImageName) --all-tags
 
               echo "=== WEB BUILD ==="
               echo "VITE_API_BASE_URL=$(VITE_API_BASE_URL)"
@@ -76,9 +83,23 @@ stages:
                 --build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) \
                 --build-arg VITE_ENV=$(VITE_ENV) \
                 -t $(acrLoginServer)/$(webImageName):$(envName) \
+                -t $(acrLoginServer)/$(webImageName):git-$(shortSha) \
+                -t $(acrLoginServer)/$(webImageName):$(dateTag) \
                 ./$(webPath)
 
-              docker push $(acrLoginServer)/$(webImageName):$(envName)
+              docker push $(acrLoginServer)/$(webImageName) --all-tags
+
+        # ===== Release Notes =====
+        - script: |
+            echo "## Release Notes" > release-notes.md
+            git log HEAD~10..HEAD --pretty=format:"- %s (%an)" >> release-notes.md
+          displayName: Generate Release Notes
+
+        - task: PublishPipelineArtifact@1
+          displayName: Publish Release Notes
+          inputs:
+            targetPath: release-notes.md
+            artifact: release-notes
 
 # =====================
 # STAGE 2 - DEPLOY

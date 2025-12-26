@@ -1,7 +1,6 @@
 trigger:
   branches:
     include:
-      - main
       - testbed
 
 pool:
@@ -80,8 +79,6 @@ stages:
               echo "VITE_API_BASE_URL=$(VITE_API_BASE_URL)"
 
               docker build \
-                --build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) \
-                --build-arg VITE_ENV=$(VITE_ENV) \
                 -t $(acrLoginServer)/$(webImageName):$(envName) \
                 -t $(acrLoginServer)/$(webImageName):git-$(shortSha) \
                 -t $(acrLoginServer)/$(webImageName):$(dateTag) \

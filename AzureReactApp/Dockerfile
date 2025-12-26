@@ -1,22 +1,27 @@
-# ===== build stage =====
-FROM node:20-alpine AS build
+# ---------- build stage ----------
+FROM node:18-alpine AS build
 WORKDIR /app
 
 COPY package*.json ./
-COPY vite.config.* tsconfig*.json ./
-COPY index.html ./
-COPY src ./src
-COPY public ./public
+RUN npm ci
 
-ARG VITE_API_BASE_URL
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-ARG VITE_ENV
-ENV VITE_ENV=$VITE_ENV
+COPY . .
 
-RUN npm install
 RUN npm run build
 
-# ===== runtime stage =====
+# ---------- runtime stage ----------
 FROM nginx:alpine
+
+# envsubst 在 gettext 里
+RUN apk add --no-cache gettext
+
 COPY --from=build /app/dist /usr/share/nginx/html
+
+# 确保 config 文件存在（来自 public/config/config.json）
+# dist/config/config.json
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 80
+ENTRYPOINT ["/entrypoint.sh"]

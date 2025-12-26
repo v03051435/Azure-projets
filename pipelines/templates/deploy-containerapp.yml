@@ -1,0 +1,45 @@
+parameters:
+  - name: environment
+    type: string
+  - name: imageTag
+    type: string
+  - name: apiAppName
+    type: string
+  - name: webAppName
+    type: string
+  - name: apiBaseUrl
+    type: string
+
+jobs:
+- job: deploy
+  displayName: Deploy to ${{ parameters.environment }}
+  pool:
+    vmImage: ubuntu-latest
+
+  steps:
+  - task: AzureCLI@2
+    displayName: Deploy API & WEB
+    inputs:
+      azureSubscription: sc-azure-rm
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -e
+        echo "Deploying tag: ${{ parameters.imageTag }}"
+
+        # ===== API =====
+        az containerapp update \
+          --name ${{ parameters.apiAppName }} \
+          --resource-group rg-devops-demo \
+          --image yhaodevopsacr.azurecr.io/repos-api:${{ parameters.imageTag }} \
+          --set-env-vars \
+            ASPNETCORE_ENVIRONMENT=${{ parameters.environment }}
+
+        # ===== WEB =====
+        az containerapp update \
+          --name ${{ parameters.webAppName }} \
+          --resource-group rg-devops-demo \
+          --image yhaodevopsacr.azurecr.io/repos-web:${{ parameters.imageTag }} \
+          --set-env-vars \
+            API_BASE_URL=${{ parameters.apiBaseUrl }} \
+            VITE_ENV=${{ parameters.environment }}

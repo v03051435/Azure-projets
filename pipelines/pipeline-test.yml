@@ -1,0 +1,93 @@
+trigger:
+  branches:
+    include:
+      - testbed
+
+variables:
+  acrLoginServer: yhaodevopsacr.azurecr.io
+  apiImageName: repos-api
+  webImageName: repos-web
+  apiPath: AzureWebAp
+  webPath: AzureReactApp
+
+  # ===== versioning =====
+  gitSha: $(Build.SourceVersion)
+  shortSha: $[substring(variables['Build.SourceVersion'], 0, 7)]
+  dateTag: build-$(Build.BuildId)
+
+stages:
+
+# =====================
+# BUILD
+# =====================
+- stage: build
+  displayName: Build Images
+  jobs:
+  - job: build
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - checkout: self
+
+    - task: AzureCLI@2
+      displayName: Build & Push Images
+      inputs:
+        azureSubscription: sc-azure-rm
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          az acr login --name yhaodevopsacr
+
+          # API
+          docker build \
+            -t $(acrLoginServer)/$(apiImageName):git-$(shortSha) \
+            -t $(acrLoginServer)/$(apiImageName):$(envName) \
+            -t $(acrLoginServer)/$(apiImageName):$(dateTag) \
+            ./$(apiPath)
+          docker push $acrLoginServer/$apiImageName:git-$(shortSha)
+
+          # WEB (不传环境参数！)
+          docker build \
+            -t $acrLoginServer/$webImageName:git-$(shortSha) \
+            -t $acrLoginServer/$webImageName:$(envName) \
+            -t $acrLoginServer/$webImageName:$(dateTag) \
+            ./$(webPath)
+          docker push $acrLoginServer/$webImageName:git-$(shortSha)
+
+# =====================
+# DEPLOY TEST
+# =====================
+- stage: deploy_test
+  dependsOn: build
+  jobs:
+  - template: templates/deploy-containerapp.yml
+    parameters:
+      environment: Testbed
+      imageTag: git-$(shortSha)
+      apiAppName: demo-api-testbed
+      webAppName: demo-web-testbed
+      apiBaseUrl: https://demo-api-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io
+
+  # ---------- GENERATE IMAGE INFO (PROMOTE 核心) ----------
+  - bash: |
+      mkdir -p image-info
+      echo "{
+        \"apiImage\": \"$(acrLoginServer)/$(apiRepo):$(imageTag)\",
+        \"webImage\": \"$(acrLoginServer)/$(webRepo):$(imageTag)\",
+        \"tag\": \"$(imageTag)\",
+        \"commit\": \"$(Build.SourceVersion)\",
+        \"buildId\": \"$(Build.BuildId)\"
+      }" > image-info/image.json
+
+      echo "===== IMAGE INFO ====="
+      cat image-info/image.json
+    displayName: Generate image info artifact
+
+  # ---------- PUBLISH ARTIFACT ----------
+  - task: PublishPipelineArtifact@1
+    displayName: Publish image info for PROMOTE
+    inputs:
+      targetPath: image-info
+      artifact: image-info
+

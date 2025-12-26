@@ -1,0 +1,20 @@
+trigger: none   # ❗ 不自动跑
+
+parameters:
+- name: imageTag
+  displayName: Image tag to deploy
+  type: string
+  default: git-xxxxxxx   # 手动填 / 回滚填旧的
+
+stages:
+- stage: deploy_prod
+  displayName: Promote to PROD
+  jobs:
+  - template: templates/deploy-containerapp.yml
+    parameters:
+      environment: Production
+      imageTag: ${{ parameters.imageTag }}
+      apiAppName: demo-api-prod
+      webAppName: demo-web-prod
+      apiBaseUrl: https://demo-api-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io
+   

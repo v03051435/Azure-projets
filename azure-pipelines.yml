@@ -25,14 +25,14 @@ variables:
     envName: prod
     apiAppName: demo-api-prod
     webAppName: demo-web-prod
-    VITE_API_BASE_URL: https://demo-api-prod.whitebay-41407b86.francecentral.azurecontainerapps.io
+    VITE_API_BASE_URL: https://demo-api-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io
     ASPNETCORE_ENVIRONMENT: Production
 
   ${{ if eq(variables['Build.SourceBranchName'], 'testbed') }}:
     envName: testbed
     apiAppName: demo-api-testbed
     webAppName: demo-web-testbed
-    VITE_API_BASE_URL: https://demo-api-testbed.whitebay-41407b86.francecentral.azurecontainerapps.io
+    VITE_API_BASE_URL: https://demo-api-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io
     ASPNETCORE_ENVIRONMENT: Testbed
 
 stages:

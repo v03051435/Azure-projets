@@ -1,22 +1,30 @@
 version: "3.9"
 
 services:
-  api:
-    build:
-      context: ./AzureWebAp
-    container_name: demo-api
+  api-testbed:
+    image: yhaodevopsacr.azurecr.io/repos-api:testbed
+    container_name: api-testbed
     ports:
       - "8080:8080"
-    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Testbed
 
-  web:
-    build:
-      context: ./AzureReactApp
-      args:
-        VITE_API_BASE_URL: https://demo-api.whitebay-41407b86.francecentral.azurecontainerapps.io/
-    container_name: demo-web
+  api-prod:
+    image: yhaodevopsacr.azurecr.io/repos-api:prod
+    container_name: api-prod
     ports:
-      - "5173:80"
-    depends_on:
-      - api
-    restart: unless-stopped
+      - "8081:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+
+  web-testbed:
+    image: yhaodevopsacr.azurecr.io/repos-web:testbed
+    container_name: web-testbed
+    ports:
+      - "3000:80"
+
+  web-prod:
+    image: yhaodevopsacr.azurecr.io/repos-web:prod
+    container_name: web-prod
+    ports:
+      - "3001:80"

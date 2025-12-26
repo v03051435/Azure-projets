@@ -91,7 +91,7 @@ stages:
           # Deploy Web
           az containerapp update --name demo-web-testbed --resource-group rg-devops-demo \
             --image yhaodevopsacr.azurecr.io/repos-web:$imageTag \
-            --set-env-vars API_BASE_URL=https://demo-api-testbed... VITE_ENV=Testbed
+            --set-env-vars API_BASE_URL=https://demo-api-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io VITE_ENV=Testbed
 
     - bash: |
         mkdir -p image-info

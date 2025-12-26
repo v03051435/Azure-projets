@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import './App.css'
+import { apiBaseUrl, viteEnv } from '../public/config/runtimeConfig'
+
 
 type Item = {
   id: number
@@ -11,7 +13,8 @@ function App() {
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  const API_BASE_URL = apiBaseUrl();
+  const VITE_ENV = viteEnv();
 
   useEffect(() => {
     const controller = new AbortController()
@@ -35,12 +38,18 @@ function App() {
     }
     load()
     return () => controller.abort()
-  }, [])
+  }, [API_BASE_URL])
 
   return (
     <>
       <section>
-        <h2>Data from API (environment: {import.meta.env.VITE_ENV ?? import.meta.env.MODE})</h2>
+        <section className="header">
+          <h1>Azure React App</h1>
+          <p className="muted">
+            Version 1.0.0 - Built with Vite and React
+          </p>
+        </section>
+        <h2>Data from API (environment: {VITE_ENV})</h2>
 
         {loading && <p>Loading data...</p>}
         {error && <p className="error">Error: {error}</p>}

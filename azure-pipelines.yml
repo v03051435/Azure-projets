@@ -12,7 +12,7 @@ variables:
   acrLoginServer: yhaodevopsacr.azurecr.io
   resourceGroup: rg-devops-demo
 
-  containerEnvName: managedEnvironment-rgdevopsdemo-9049   # 👈 已存在的 Container Apps Environment
+  containerEnvName: cae-devops-demo
 
   apiImageName: repos-api
   webImageName: repos-web

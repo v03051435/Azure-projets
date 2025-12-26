@@ -10,6 +10,33 @@ stages:
 - stage: deploy_prod
   displayName: Promote to PROD
   jobs:
+  - job: generate_release_notes
+    displayName: Generate release notes
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - checkout: self
+    - bash: |
+        set -e
+        echo "Generating release notes for imageTag=${{ parameters.imageTag }}"
+        git fetch --tags --prune || true
+        last_tag=$(git tag --sort=-creatordate | head -n1 || true)
+        if [ -z "$last_tag" ]; then
+          echo "No tags found, using last 50 commits"
+          git log -n 50 --pretty=format:"%h %s" > release-notes.txt
+        else
+          echo "Comparing to last tag: $last_tag"
+          git log $last_tag..HEAD --pretty=format:"%h %s" > release-notes.txt || git log -n 50 --pretty=format:"%h %s" > release-notes.txt
+        fi
+        echo "Image tag: ${{ parameters.imageTag }}" >> release-notes.txt
+        echo "Generated release notes:"
+        cat release-notes.txt
+      displayName: Generate release notes
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: release-notes.txt
+        artifact: release-notes
+
   - template: templates/deploy-containerapp.yml
     parameters:
       environment: Production

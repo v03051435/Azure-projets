@@ -13,6 +13,7 @@ variables:
   # ===== versioning =====
   gitSha: $(Build.SourceVersion)
   shortSha: $[substring(variables['Build.SourceVersion'], 0, 7)]
+  imageTag: git-$(shortSha)
   dateTag: build-$(Build.BuildId)
 
 stages:
@@ -73,8 +74,8 @@ stages:
   - bash: |
       mkdir -p image-info
       echo "{
-        \"apiImage\": \"$(acrLoginServer)/$(apiRepo):$(imageTag)\",
-        \"webImage\": \"$(acrLoginServer)/$(webRepo):$(imageTag)\",
+        \"apiImage\": \"$(acrLoginServer)/$(apiImageName):$(imageTag)\",
+        \"webImage\": \"$(acrLoginServer)/$(webImageName):$(imageTag)\",
         \"tag\": \"$(imageTag)\",
         \"commit\": \"$(Build.SourceVersion)\",
         \"buildId\": \"$(Build.BuildId)\"
@@ -90,4 +91,45 @@ stages:
     inputs:
       targetPath: image-info
       artifact: image-info
+
+# =====================
+# SMOKE TEST
+# =====================
+- stage: smoke_test
+  dependsOn: deploy_test
+  jobs:
+  - job: smoke
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: AzureCLI@2
+      displayName: Check deployed Container Apps
+      inputs:
+        azureSubscription: sc-azure-rm
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          echo "Verifying API Container App image contains tag: $(imageTag)"
+          api_image=$(az containerapp show --name demo-api-testbed --resource-group rg-devops-demo --query configuration.image -o tsv)
+          echo "API image: $api_image"
+          echo "$api_image" | grep "$(imageTag)" || (echo "ERROR: API not updated to tag $(imageTag)" && exit 1)
+
+          echo "Verifying WEB Container App image contains tag: $(imageTag)"
+          web_image=$(az containerapp show --name demo-web-testbed --resource-group rg-devops-demo --query configuration.image -o tsv)
+          echo "WEB image: $web_image"
+          echo "$web_image" | grep "$(imageTag)" || (echo "ERROR: WEB not updated to tag $(imageTag)" && exit 1)
+
+          echo "Testing web endpoint (expect HTTP 200)..."
+          for i in 1 2 3; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" https://demo-web-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io || true)
+            echo "HTTP code: $status"
+            if [ "$status" = "200" ]; then
+              echo "Web endpoint is reachable"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "ERROR: web endpoint not responding with 200" && exit 1
+
 

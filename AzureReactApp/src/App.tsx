@@ -44,7 +44,7 @@ function App() {
     <>
       <section>
         <section className="header">
-          <h1>Azure React App : OK !!!</h1>
+          <h1>Azure React App : 出错了。。。</h1>
           <p className="muted">
             OK
           </p>

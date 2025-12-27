@@ -67,7 +67,7 @@ stages:
       vmImage: ubuntu-latest
 
     variables:
-      finalImageTag: ${{ stageDependencies.promote_prod.prepare.outputs['resolve.imageTag'] }}
+      finalImageTag: $[ dependencies.prepare.outputs['resolve.imageTag'] ]
 
     strategy:
       runOnce:

@@ -29,32 +29,47 @@ stages:
       displayName: Download image-info from test_build (optional)
       continueOnError: true  # ok if no artifact; manual tag can still be used
 
-    - bash: |
-        set -e
-        param_tag="${{ parameters.imageTag }}"
-        artifact_json="$(Pipeline.Workspace)/test_build/image-info/image.json"
+    - task: AzureCLI@2
+      displayName: Resolve image tag from input, artifact, or ACR (fallback)
+      name: resolve_tag
+      inputs:
+        azureSubscription: sc-azure-rm
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          param_tag="${{ parameters.imageTag }}"
+          artifact_json="$(Pipeline.Workspace)/test_build/image-info/image.json"
 
-        tag_from_artifact=""
-        if [ -f "$artifact_json" ]; then
-          tag_from_artifact=$(python -c 'import json,os; print(json.load(open(os.environ["ARTIFACT_JSON"])) .get("tag",""))' || true)
-        else
-          echo "image-info artifact not found at $artifact_json (ok if you type a tag manually)."
-        fi
+          tag_from_artifact=""
+          if [ -f "$artifact_json" ]; then
+            tag_from_artifact=$(python -c 'import json,os; print(json.load(open(os.environ["ARTIFACT_JSON"])) .get("tag",""))' || true)
+          else
+            echo "image-info artifact not found at $artifact_json (ok if you type a tag manually)."
+          fi
 
-        final_tag="$param_tag"
-        if [ -z "$final_tag" ]; then final_tag="$tag_from_artifact"; fi
-        if [ -z "$final_tag" ]; then
-          echo "ERROR: imageTag not provided and no artifact tag found. Provide parameters.imageTag or select a test_build run with image-info."
-          exit 1
-        fi
+          final_tag="$param_tag"
+          if [ -z "$final_tag" ]; then final_tag="$tag_from_artifact"; fi
 
-        echo "Resolved imageTag=$final_tag"
-        echo "##vso[task.setvariable variable=ResolvedImageTag]$final_tag"
-        echo "##vso[task.setvariable variable=imageTag;isOutput=true]$final_tag"
+          if [ -z "$final_tag" ]; then
+            echo "No tag found in parameters or artifact — querying ACR for latest tag"
+            api_latest=$(az acr repository show-manifests --name yhaodevopsacr --repository repos-api --orderby time_desc --query "[0].tags[0]" -o tsv || true)
+            web_latest=$(az acr repository show-manifests --name yhaodevopsacr --repository repos-web --orderby time_desc --query "[0].tags[0]" -o tsv || true)
+            echo "ACR latest: api=$api_latest web=$web_latest"
+            if [ -n "$api_latest" ] && [ "$api_latest" = "$web_latest" ]; then
+              final_tag="$api_latest"
+              echo "Using latest tag from ACR: $final_tag"
+            else
+              echo "ERROR: Could not determine a matching latest tag from ACR. Provide parameters.imageTag or select a test_build run with image-info."
+              exit 1
+            fi
+          fi
+
+          echo "Resolved imageTag=$final_tag"
+          echo "##vso[task.setvariable variable=ResolvedImageTag]$final_tag"
+          echo "##vso[task.setvariable variable=imageTag;isOutput=true]$final_tag"
       env:
         ARTIFACT_JSON: $(Pipeline.Workspace)/test_build/image-info/image.json
-      name: resolve_tag
-      displayName: Resolve image tag from input or artifact
 
     - bash: |
         set -e

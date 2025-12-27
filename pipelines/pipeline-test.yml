@@ -94,9 +94,11 @@ stages:
             --set-env-vars API_BASE_URL=https://demo-api-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io VITE_ENV=Testbed
 
     - bash: |
+        set -e
+        imageTag="git-$(shortSha)"
         mkdir -p image-info
         echo "{\"apiImage\":\"yhaodevopsacr.azurecr.io/repos-api:$imageTag\",\"webImage\":\"yhaodevopsacr.azurecr.io/repos-web:$imageTag\",\"tag\":\"$imageTag\",\"commit\":\"$(Build.SourceVersion)\",\"buildId\":\"$(Build.BuildId)\"}" > image-info/image.json
-        echo "az pipelines run --name pipeline-prod --parameters imageTag=$imageTag" > image-info/prod-trigger.txt
+        echo "az pipelines run --name pipeline-prod --resources pipelines.test_build.runId=$(Build.BuildId)" > image-info/prod-trigger.txt
         echo "生成 prod 触发命令："
         cat image-info/prod-trigger.txt
       displayName: Generate image-info and prod trigger

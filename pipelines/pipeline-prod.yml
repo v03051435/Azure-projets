@@ -36,16 +36,7 @@ stages:
 
         tag_from_artifact=""
         if [ -f "$artifact_json" ]; then
-          tag_from_artifact=$(
-            python - <<'PY' || true
-            import json, os, sys
-            path = os.environ["ARTIFACT_JSON"]
-            with open(path) as f:
-                data = json.load(f)
-            tag = data.get("tag", "")
-            sys.stdout.write(tag)
-            PY
-          )
+          tag_from_artifact=$(python -c 'import json,os; print(json.load(open(os.environ["ARTIFACT_JSON"])) .get("tag",""))' || true)
         else
           echo "image-info artifact not found at $artifact_json (ok if you type a tag manually)."
         fi

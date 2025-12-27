@@ -32,18 +32,18 @@ stages:
           echo "ERROR: Cannot resolve image tag from artifact"
           exit 1
         fi
+
         echo "Resolved tag=$tag"
 
         # 当前 job 可用
         echo "##vso[task.setvariable variable=ResolvedImageTag]$tag"
-        # 给下一个 job 用
+        # 给下一个 job / deployment job 用
         echo "##vso[task.setvariable variable=imageTag;isOutput=true]$tag"
       name: resolve
       displayName: Resolve image tag
 
     - bash: |
         set -e
-        echo "Generating release notes"
         git fetch --tags --prune || true
         git log -n 30 --pretty=format:"%h %s" > release-notes.txt
         echo "" >> release-notes.txt
@@ -57,17 +57,17 @@ stages:
         artifact: release-notes
 
   # =====================================================
-  # JOB 2 - Deploy PROD (with Approval)
+  # DEPLOYMENT JOB - Deploy PROD (with Approval)
   # =====================================================
   - deployment: deploy_prod
     displayName: Deploy to PROD
     dependsOn: prepare
-    environment: prod   # ✅ 只有 deployment job 才能用 environment
+    environment: prod
     pool:
       vmImage: ubuntu-latest
 
     variables:
-      finalImageTag: ${{ dependencies.prepare.outputs['resolve.imageTag'] }}
+      finalImageTag: ${{ stageDependencies.promote_prod.prepare.outputs['resolve.imageTag'] }}
 
     strategy:
       runOnce:
@@ -81,6 +81,7 @@ stages:
               scriptLocation: inlineScript
               inlineScript: |
                 set -e
+
                 tag="$(finalImageTag)"
                 if [ -z "$tag" ]; then
                   echo "ERROR: finalImageTag is empty"

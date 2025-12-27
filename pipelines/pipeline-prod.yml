@@ -37,7 +37,7 @@ stages:
         tag_from_artifact=""
         if [ -f "$artifact_json" ]; then
           tag_from_artifact=$(
-            python - <<'PY' || true
+            python3 - <<'PY' || true
 import json, os, sys
 path = os.environ["ARTIFACT_JSON"]
 with open(path) as f:

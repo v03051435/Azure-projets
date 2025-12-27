@@ -8,9 +8,10 @@ parameters:
 stages:
 - stage: rollback_prod
   displayName: Rollback PROD
-  environment: prod
   jobs:
   - job: rollback
+    displayName: Rollback API & WEB to selected tag
+    environment: prod
     pool:
       vmImage: ubuntu-latest
     steps:

@@ -92,7 +92,7 @@ stages:
     displayName: Deploy to PROD
     dependsOn: generate_release_notes
     variables:
-      finalImageTag: ${{ dependencies.generate_release_notes.outputs['resolve_tag.imageTag'] }}
+      finalImageTag: $[ dependencies.generate_release_notes.outputs['resolve_tag.imageTag'] ]
     pool:
       vmImage: ubuntu-latest
     steps:

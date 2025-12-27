@@ -1,24 +1,74 @@
-trigger: none   # ❗ 不自动跑
+trigger: none  # manual run
+
+resources:
+  pipelines:
+    - pipeline: test_build        # consume artifacts from pipeline-test
+      source: pipeline-test       # ADO pipeline name
+      branch: testbed
+      trigger: none               # choose run in UI; supports rollback to old run
 
 parameters:
 - name: imageTag
-  displayName: Image tag to deploy
+  displayName: Image tag to deploy (empty -> read from selected test_build run)
   type: string
-  default: git-fa273a2   # 手动填 / 回滚填旧的
+  default: ''
 
 stages:
 - stage: deploy_prod
   displayName: Promote to PROD
   jobs:
   - job: generate_release_notes
-    displayName: Generate release notes
+    displayName: Resolve tag & generate release notes
     pool:
       vmImage: ubuntu-latest
     steps:
     - checkout: self
+
+    - download: test_build
+      artifact: image-info
+      displayName: Download image-info from test_build (optional)
+      continueOnError: true  # ok if no artifact; manual tag can still be used
+
     - bash: |
         set -e
-        echo "Generating release notes for imageTag=${{ parameters.imageTag }}"
+        param_tag="${{ parameters.imageTag }}"
+        artifact_json="$(Pipeline.Workspace)/test_build/image-info/image.json"
+
+        tag_from_artifact=""
+        if [ -f "$artifact_json" ]; then
+          tag_from_artifact=$(
+            python3 - <<'PY' || true
+            import json, os, sys
+            path = os.environ["ARTIFACT_JSON"]
+            with open(path) as f:
+                data = json.load(f)
+            tag = data.get("tag", "")
+            sys.stdout.write(tag)
+            PY
+          )
+        else
+          echo "image-info artifact not found at $artifact_json (ok if you type a tag manually)."
+        fi
+
+        final_tag="$param_tag"
+        if [ -z "$final_tag" ]; then final_tag="$tag_from_artifact"; fi
+        if [ -z "$final_tag" ]; then
+          echo "ERROR: imageTag not provided and no artifact tag found. Provide parameters.imageTag or select a test_build run with image-info."
+          exit 1
+        fi
+
+        echo "Resolved imageTag=$final_tag"
+        echo "##vso[task.setvariable variable=ResolvedImageTag]$final_tag"
+        echo "##vso[task.setvariable variable=imageTag;isOutput=true]$final_tag"
+      env:
+        ARTIFACT_JSON: $(Pipeline.Workspace)/test_build/image-info/image.json
+      name: resolve_tag
+      displayName: Resolve image tag from input or artifact
+
+    - bash: |
+        set -e
+        imageTag="$(ResolvedImageTag)"
+        echo "Generating release notes for imageTag=${imageTag}"
         git fetch --tags --prune || true
         last_tag=$(git tag --sort=-creatordate | head -n1 || true)
         if [ -z "$last_tag" ]; then
@@ -28,10 +78,11 @@ stages:
           echo "Comparing to last tag: $last_tag"
           git log $last_tag..HEAD --pretty=format:"%h %s" > release-notes.txt || git log -n 50 --pretty=format:"%h %s" > release-notes.txt
         fi
-        echo "Image tag: ${{ parameters.imageTag }}" >> release-notes.txt
+        echo "Image tag: ${imageTag}" >> release-notes.txt
         echo "Generated release notes:"
         cat release-notes.txt
       displayName: Generate release notes
+
     - task: PublishPipelineArtifact@1
       inputs:
         targetPath: release-notes.txt
@@ -39,21 +90,30 @@ stages:
 
   - job: deploy_prod
     displayName: Deploy to PROD
+    dependsOn: generate_release_notes
+    variables:
+      finalImageTag: ${{ dependencies.generate_release_notes.outputs['resolve_tag.imageTag'] }}
     pool:
       vmImage: ubuntu-latest
     steps:
     - task: AzureCLI@2
       displayName: Deploy API & WEB to Prod
+      env:
+        IMAGE_TAG: $(finalImageTag)
       inputs:
         azureSubscription: sc-azure-rm
         scriptType: bash
         scriptLocation: inlineScript
         inlineScript: |
           set -e
-          imageTag="${{ parameters.imageTag }}"
+          imageTag="$IMAGE_TAG"
+          if [ -z "$imageTag" ]; then
+            echo "ERROR: finalImageTag is empty; ensure resolve_tag step succeeded."
+            exit 1
+          fi
           echo "Promoting imageTag=$imageTag to Production"
 
-          # 检查 tag 是否存在
+          # Validate tag existence
           az acr login --name yhaodevopsacr
           api_ok=$(az acr repository show-tags --name yhaodevopsacr --repository repos-api --query "contains(@, '$imageTag')" -o tsv)
           web_ok=$(az acr repository show-tags --name yhaodevopsacr --repository repos-web --query "contains(@, '$imageTag')" -o tsv)
@@ -64,33 +124,37 @@ stages:
             exit 1
           fi
 
-          # 检查 Container Apps 是否有从 ACR 拉镜像的权限（AcrPull）
+          # Soft check AcrPull permission (warn only)
           rg=rg-devops-demo
           registryId=$(az acr show --name yhaodevopsacr --resource-group $rg --query id -o tsv)
 
-          api_principal=$(az containerapp show --name demo-api-prod --resource-group $rg --query identity.principalId -o tsv || true)
-          if [ -z "$api_principal" ]; then
-            echo "WARNING: API Container App has no managed identity; ensure registry credentials or system assigned identity with AcrPull"
-          else
-            api_assigned=$(az role assignment list --assignee "$api_principal" --scope "$registryId" --query "[?roleDefinitionName=='AcrPull'] | length(@)" -o tsv)
-            if [ "$api_assigned" = "0" ]; then
-              echo "ERROR: API Container App principal '$api_principal' lacks AcrPull on registry. Run: az role assignment create --assignee $api_principal --role AcrPull --scope $registryId"
-              exit 1
+          check_acr_pull() {
+            local app_name=$1
+            local principal=$2
+            local registry_id=$3
+
+            if [ -z "$principal" ]; then
+              echo "WARNING: $app_name has no managed identity; ensure registry credentials or system assigned identity with AcrPull"
+              return
             fi
-          fi
+
+            local assigned
+            assigned=$(az role assignment list --assignee "$principal" --scope "$registry_id" --query "[?roleDefinitionName=='AcrPull'] | length(@)" -o tsv)
+            if [ "$assigned" = "0" ]; then
+              echo "WARNING: $app_name principal '$principal' lacks AcrPull on registry. Grant with:"
+              echo "  az role assignment create --assignee $principal --role AcrPull --scope $registry_id"
+            else
+              echo "$app_name AcrPull check: OK"
+            fi
+          }
+
+          api_principal=$(az containerapp show --name demo-api-prod --resource-group $rg --query identity.principalId -o tsv || true)
+          check_acr_pull "API Container App" "$api_principal" "$registryId"
 
           web_principal=$(az containerapp show --name demo-web-prod --resource-group $rg --query identity.principalId -o tsv || true)
-          if [ -z "$web_principal" ]; then
-            echo "WARNING: WEB Container App has no managed identity; ensure registry credentials or system assigned identity with AcrPull"
-          else
-            web_assigned=$(az role assignment list --assignee "$web_principal" --scope "$registryId" --query "[?roleDefinitionName=='AcrPull'] | length(@)" -o tsv)
-            if [ "$web_assigned" = "0" ]; then
-              echo "ERROR: WEB Container App principal '$web_principal' lacks AcrPull on registry. Run: az role assignment create --assignee $web_principal --role AcrPull --scope $registryId"
-              exit 1
-            fi
-          fi
+          check_acr_pull "WEB Container App" "$web_principal" "$registryId"
 
-          # 执行更新
+          # Deploy updates
           az containerapp update \
             --name demo-api-prod \
             --resource-group $rg \
@@ -104,4 +168,3 @@ stages:
             --set-env-vars API_BASE_URL=https://demo-api-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io VITE_ENV=Production
 
           echo "Promote complete: $imageTag"
-   

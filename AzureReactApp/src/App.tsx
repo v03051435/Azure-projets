@@ -44,9 +44,9 @@ function App() {
     <>
       <section>
         <section className="header">
-          <h1>Azure React App</h1>
+          <h1>Azure React App : OK 版本</h1>
           <p className="muted">
-            Version 1.0.0 - Built with Vite and React
+            OK
           </p>
         </section>
         <h2>Data from API (environment: {VITE_ENV})</h2>

@@ -1,0 +1,39 @@
+trigger: none
+
+parameters:
+- name: imageTag
+  displayName: Image tag to rollback to
+  type: string
+
+stages:
+- stage: rollback_prod
+  displayName: Rollback PROD
+  environment: prod
+  jobs:
+  - job: rollback
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: AzureCLI@2
+      displayName: Rollback PROD
+      inputs:
+        azureSubscription: sc-azure-rm
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          tag="${{ parameters.imageTag }}"
+          az acr login --name yhaodevopsacr
+          rg=rg-devops-demo
+
+          az containerapp update \
+            --name demo-api-prod \
+            --resource-group $rg \
+            --image yhaodevopsacr.azurecr.io/repos-api:$tag
+
+          az containerapp update \
+            --name demo-web-prod \
+            --resource-group $rg \
+            --image yhaodevopsacr.azurecr.io/repos-web:$tag
+
+          echo "✅ Rollback completed to $tag"

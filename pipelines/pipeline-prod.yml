@@ -1,107 +1,77 @@
-trigger: none   # ❗ 不自动跑
+trigger: none
 
-parameters:
-- name: imageTag
-  displayName: Image tag to deploy
-  type: string
-  default: git-fa273a2   # 手动填 / 回滚填旧的
+resources:
+  pipelines:
+    - pipeline: test_build
+      source: pipeline-test
+      trigger: none
 
 stages:
-- stage: deploy_prod
+- stage: promote_prod
   displayName: Promote to PROD
+  environment: prod   # 🔐 ADO 里加审批
   jobs:
-  - job: generate_release_notes
-    displayName: Generate release notes
+
+  # -------- Resolve tag & release notes --------
+  - job: prepare
+    displayName: Resolve tag & release notes
     pool:
       vmImage: ubuntu-latest
     steps:
     - checkout: self
+
+    - download: test_build
+      artifact: image-info
+
     - bash: |
         set -e
-        echo "Generating release notes for imageTag=${{ parameters.imageTag }}"
+        tag=$(jq -r .tag $(Pipeline.Workspace)/test_build/image-info/image.json)
+        echo "Promoting tag=$tag"
+        echo "##vso[task.setvariable variable=ResolvedImageTag;isOutput=true]$tag"
+      name: resolve
+      displayName: Resolve image tag
+
+    - bash: |
         git fetch --tags --prune || true
-        last_tag=$(git tag --sort=-creatordate | head -n1 || true)
-        if [ -z "$last_tag" ]; then
-          echo "No tags found, using last 50 commits"
-          git log -n 50 --pretty=format:"%h %s" > release-notes.txt
-        else
-          echo "Comparing to last tag: $last_tag"
-          git log $last_tag..HEAD --pretty=format:"%h %s" > release-notes.txt || git log -n 50 --pretty=format:"%h %s" > release-notes.txt
-        fi
-        echo "Image tag: ${{ parameters.imageTag }}" >> release-notes.txt
-        echo "Generated release notes:"
-        cat release-notes.txt
+        git log -n 30 --pretty=format:"%h %s" > release-notes.txt
+        echo "" >> release-notes.txt
+        echo "Image tag: $(ResolvedImageTag)" >> release-notes.txt
       displayName: Generate release notes
+
     - task: PublishPipelineArtifact@1
       inputs:
         targetPath: release-notes.txt
         artifact: release-notes
 
-  - job: deploy_prod
-    displayName: Deploy to PROD
+  # -------- Deploy PROD --------
+  - job: deploy
+    dependsOn: prepare
+    variables:
+      imageTag: ${{ dependencies.prepare.outputs['resolve.ResolvedImageTag'] }}
     pool:
       vmImage: ubuntu-latest
     steps:
     - task: AzureCLI@2
-      displayName: Deploy API & WEB to Prod
+      displayName: Deploy PROD
       inputs:
         azureSubscription: sc-azure-rm
         scriptType: bash
         scriptLocation: inlineScript
         inlineScript: |
           set -e
-          imageTag="${{ parameters.imageTag }}"
-          echo "Promoting imageTag=$imageTag to Production"
-
-          # 检查 tag 是否存在
           az acr login --name yhaodevopsacr
-          api_ok=$(az acr repository show-tags --name yhaodevopsacr --repository repos-api --query "contains(@, '$imageTag')" -o tsv)
-          web_ok=$(az acr repository show-tags --name yhaodevopsacr --repository repos-web --query "contains(@, '$imageTag')" -o tsv)
-          if [ "$api_ok" != "true" ] || [ "$web_ok" != "true" ]; then
-            echo "ERROR: tag $imageTag not found in ACR"
-            az acr repository show-tags --name yhaodevopsacr --repository repos-api --top 20 || true
-            az acr repository show-tags --name yhaodevopsacr --repository repos-web --top 20 || true
-            exit 1
-          fi
-
-          # 检查 Container Apps 是否有从 ACR 拉镜像的权限（AcrPull）
           rg=rg-devops-demo
-          registryId=$(az acr show --name yhaodevopsacr --resource-group $rg --query id -o tsv)
 
-          api_principal=$(az containerapp show --name demo-api-prod --resource-group $rg --query identity.principalId -o tsv || true)
-          if [ -z "$api_principal" ]; then
-            echo "WARNING: API Container App has no managed identity; ensure registry credentials or system assigned identity with AcrPull"
-          else
-            api_assigned=$(az role assignment list --assignee "$api_principal" --scope "$registryId" --query "[?roleDefinitionName=='AcrPull'] | length(@)" -o tsv)
-            if [ "$api_assigned" = "0" ]; then
-              echo "ERROR: API Container App principal '$api_principal' lacks AcrPull on registry. Run: az role assignment create --assignee $api_principal --role AcrPull --scope $registryId"
-              exit 1
-            fi
-          fi
-
-          web_principal=$(az containerapp show --name demo-web-prod --resource-group $rg --query identity.principalId -o tsv || true)
-          if [ -z "$web_principal" ]; then
-            echo "WARNING: WEB Container App has no managed identity; ensure registry credentials or system assigned identity with AcrPull"
-          else
-            web_assigned=$(az role assignment list --assignee "$web_principal" --scope "$registryId" --query "[?roleDefinitionName=='AcrPull'] | length(@)" -o tsv)
-            if [ "$web_assigned" = "0" ]; then
-              echo "ERROR: WEB Container App principal '$web_principal' lacks AcrPull on registry. Run: az role assignment create --assignee $web_principal --role AcrPull --scope $registryId"
-              exit 1
-            fi
-          fi
-
-          # 执行更新
           az containerapp update \
             --name demo-api-prod \
             --resource-group $rg \
-            --image yhaodevopsacr.azurecr.io/repos-api:$imageTag \
+            --image yhaodevopsacr.azurecr.io/repos-api:$(imageTag) \
             --set-env-vars ASPNETCORE_ENVIRONMENT=Production
 
           az containerapp update \
             --name demo-web-prod \
             --resource-group $rg \
-            --image yhaodevopsacr.azurecr.io/repos-web:$imageTag \
-            --set-env-vars API_BASE_URL=https://demo-api-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io VITE_ENV=Production
-
-          echo "Promote complete: $imageTag"
-   
+            --image yhaodevopsacr.azurecr.io/repos-web:$(imageTag) \
+            --set-env-vars \
+              API_BASE_URL=https://demo-api-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io \
+              VITE_ENV=Production

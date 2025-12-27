@@ -4,7 +4,7 @@ resources:
   pipelines:
     - pipeline: test_build        # consume artifacts from pipeline-test
       source: pipeline-test       # ADO pipeline name
-      branch: testbed
+      # branch: testbed           # removed to allow selecting test_build runs from any branch in UI
       trigger: none               # choose run in UI; supports rollback to old run
 
 parameters:

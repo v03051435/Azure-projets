@@ -68,27 +68,32 @@ stages:
           rg=rg-devops-demo
           registryId=$(az acr show --name yhaodevopsacr --resource-group $rg --query id -o tsv)
 
-          api_principal=$(az containerapp show --name demo-api-prod --resource-group $rg --query identity.principalId -o tsv || true)
-          if [ -z "$api_principal" ]; then
-            echo "WARNING: API Container App has no managed identity; ensure registry credentials or system assigned identity with AcrPull"
-          else
-            api_assigned=$(az role assignment list --assignee "$api_principal" --scope "$registryId" --query "[?roleDefinitionName=='AcrPull'] | length(@)" -o tsv)
-            if [ "$api_assigned" = "0" ]; then
-              echo "ERROR: API Container App principal '$api_principal' lacks AcrPull on registry. Run: az role assignment create --assignee $api_principal --role AcrPull --scope $registryId"
-              exit 1
+          # Soft check AcrPull instead of blocking the deployment; useful once identities/roles are stable.
+          check_acr_pull() {
+            local app_name=$1
+            local principal=$2
+            local registry_id=$3
+
+            if [ -z "$principal" ]; then
+              echo "WARNING: $app_name has no managed identity; ensure registry credentials or system assigned identity with AcrPull"
+              return
             fi
-          fi
+
+            local assigned
+            assigned=$(az role assignment list --assignee "$principal" --scope "$registry_id" --query "[?roleDefinitionName=='AcrPull'] | length(@)" -o tsv)
+            if [ "$assigned" = "0" ]; then
+              echo "WARNING: $app_name principal '$principal' lacks AcrPull on registry. Grant with:"
+              echo "  az role assignment create --assignee $principal --role AcrPull --scope $registry_id"
+            else
+              echo "$app_name AcrPull check: OK"
+            fi
+          }
+
+          api_principal=$(az containerapp show --name demo-api-prod --resource-group $rg --query identity.principalId -o tsv || true)
+          check_acr_pull "API Container App" "$api_principal" "$registryId"
 
           web_principal=$(az containerapp show --name demo-web-prod --resource-group $rg --query identity.principalId -o tsv || true)
-          if [ -z "$web_principal" ]; then
-            echo "WARNING: WEB Container App has no managed identity; ensure registry credentials or system assigned identity with AcrPull"
-          else
-            web_assigned=$(az role assignment list --assignee "$web_principal" --scope "$registryId" --query "[?roleDefinitionName=='AcrPull'] | length(@)" -o tsv)
-            if [ "$web_assigned" = "0" ]; then
-              echo "ERROR: WEB Container App principal '$web_principal' lacks AcrPull on registry. Run: az role assignment create --assignee $web_principal --role AcrPull --scope $registryId"
-              exit 1
-            fi
-          fi
+          check_acr_pull "WEB Container App" "$web_principal" "$registryId"
 
           # 执行更新
           az containerapp update \

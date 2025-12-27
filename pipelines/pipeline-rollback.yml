@@ -1,40 +1,63 @@
-trigger: none
-
+trigger: none   # 只允许手动执行
 parameters:
 - name: imageTag
-  displayName: Image tag to rollback to
+  displayName: Image tag to rollback to (REQUIRED)
   type: string
-
+  default: ''
 stages:
 - stage: rollback_prod
   displayName: Rollback PROD
   jobs:
   - job: rollback
     displayName: Rollback API & WEB to selected tag
-    environment: prod
     pool:
       vmImage: ubuntu-latest
     steps:
     - task: AzureCLI@2
-      displayName: Rollback PROD
+      displayName: Rollback PROD to selected image tag
       inputs:
         azureSubscription: sc-azure-rm
         scriptType: bash
         scriptLocation: inlineScript
         inlineScript: |
           set -e
-          tag="${{ parameters.imageTag }}"
+          imageTag="${{ parameters.imageTag }}"
+          if [ -z "$imageTag" ]; then
+            echo "❌ ERROR: imageTag is required for rollback"
+            exit 1
+          fi
+          echo "🔁 Rolling back PROD to imageTag=$imageTag"
+          # ---- check tag exists in ACR ----
           az acr login --name yhaodevopsacr
+          api_ok=$(az acr repository show-tags \
+            --name yhaodevopsacr \
+            --repository repos-api \
+            --query "contains(@, '$imageTag')" -o tsv)
+          web_ok=$(az acr repository show-tags \
+            --name yhaodevopsacr \
+            --repository repos-web \
+            --query "contains(@, '$imageTag')" -o tsv)
+          if [ "$api_ok" != "true" ] || [ "$web_ok" != "true" ]; then
+            echo "❌ ERROR: tag $imageTag not found in ACR"
+            echo "Available API tags:"
+            az acr repository show-tags --name yhaodevopsacr --repository repos-api --top 20
+            echo "Available WEB tags:"
+            az acr repository show-tags --name yhaodevopsacr --repository repos-web --top 20
+            exit 1
+          fi
           rg=rg-devops-demo
-
+          # ---- rollback API ----
           az containerapp update \
             --name demo-api-prod \
             --resource-group $rg \
-            --image yhaodevopsacr.azurecr.io/repos-api:$tag
-
+            --image yhaodevopsacr.azurecr.io/repos-api:$imageTag \
+            --set-env-vars ASPNETCORE_ENVIRONMENT=Production
+          # ---- rollback WEB ----
           az containerapp update \
             --name demo-web-prod \
             --resource-group $rg \
-            --image yhaodevopsacr.azurecr.io/repos-web:$tag
-
-          echo "✅ Rollback completed to $tag"
+            --image yhaodevopsacr.azurecr.io/repos-web:$imageTag \
+            --set-env-vars \
+              API_BASE_URL=https://demo-api-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io \
+              VITE_ENV=Production
+          echo "✅ Rollback completed successfully → $imageTag"

@@ -4,58 +4,57 @@ trigger:
       - testbed
 
 variables:
+  acrName: yhaodevopsacr
   acrLoginServer: yhaodevopsacr.azurecr.io
   apiImageName: repos-api
   webImageName: repos-web
   apiPath: AzureWebAp
   webPath: AzureReactApp
 
-  # ===== versioning =====
   gitSha: $(Build.SourceVersion)
   shortSha: $[substring(variables['Build.SourceVersion'], 0, 7)]
   imageTag: git-$(shortSha)
 
 stages:
-
-# =====================
-# BUILD
-# =====================
+# ================= BUILD =================
 - stage: build
-  displayName: Build Images
+  displayName: Build & Push Images
   jobs:
   - job: build
-    displayName: Build & Push Images
     pool:
       vmImage: ubuntu-latest
     steps:
     - checkout: self
 
     - task: AzureCLI@2
-      displayName: Build & Push Images
+      displayName: Build & Push API + WEB
       inputs:
         azureSubscription: sc-azure-rm
         scriptType: bash
         scriptLocation: inlineScript
         inlineScript: |
           set -e
-          az acr login --name yhaodevopsacr
+          az acr login --name $(acrName)
 
-          echo "Building API image $(imageTag)"
-          docker build \
-            -t $(acrLoginServer)/$(apiImageName):$(imageTag) \
-            ./$(apiPath)
+          docker build -t $(acrLoginServer)/$(apiImageName):$(imageTag) $(apiPath)
           docker push $(acrLoginServer)/$(apiImageName):$(imageTag)
 
-          echo "Building WEB image $(imageTag)"
-          docker build \
-            -t $(acrLoginServer)/$(webImageName):$(imageTag) \
-            ./$(webPath)
+          docker build -t $(acrLoginServer)/$(webImageName):$(imageTag) $(webPath)
           docker push $(acrLoginServer)/$(webImageName):$(imageTag)
 
-# =====================
-# DEPLOY TEST
-# =====================
-- stage: deploy_test
+    - bash: |
+        mkdir -p image-info
+        echo "{ \"tag\": \"$(imageTag)\", \"commit\": \"$(gitSha)\", \"branch\": \"testbed\" }" > image-info/image.json
+      displayName: Generate image-info artifact
+
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: image-info
+        artifact: image-info
+
+# ================= DEPLOY TESTBED =================
+- stage: deploy_testbed
+  displayName: Deploy to TESTBED
   dependsOn: build
   jobs:
   - job: deploy
@@ -63,50 +62,27 @@ stages:
       vmImage: ubuntu-latest
     steps:
     - task: AzureCLI@2
-      displayName: Deploy API & WEB to Test
+      displayName: Deploy API & WEB to TESTBED
       inputs:
         azureSubscription: sc-azure-rm
         scriptType: bash
         scriptLocation: inlineScript
         inlineScript: |
           set -e
-          imageTag=git-$(shortSha)
+          az acr login --name $(acrName)
 
-          # 检查 tags
-          az acr login --name yhaodevopsacr
-          api_ok=$(az acr repository show-tags --name yhaodevopsacr --repository repos-api --query "contains(@, '$imageTag')" -o tsv)
-          web_ok=$(az acr repository show-tags --name yhaodevopsacr --repository repos-web --query "contains(@, '$imageTag')" -o tsv)
-          if [ "$api_ok" != "true" ] || [ "$web_ok" != "true" ]; then
-            echo "ERROR: tag $imageTag not found in ACR"
-            az acr repository show-tags --name yhaodevopsacr --repository repos-api --top 20 || true
-            az acr repository show-tags --name yhaodevopsacr --repository repos-web --top 20 || true
-            exit 1
-          fi
+          rg=rg-devops-demo
 
-          # Deploy API
-          az containerapp update --name demo-api-testbed --resource-group rg-devops-demo \
-            --image yhaodevopsacr.azurecr.io/repos-api:$imageTag \
+          az containerapp update \
+            --name demo-api-testbed \
+            --resource-group $rg \
+            --image $(acrLoginServer)/$(apiImageName):$(imageTag) \
             --set-env-vars ASPNETCORE_ENVIRONMENT=Testbed
 
-          # Deploy Web
-          az containerapp update --name demo-web-testbed --resource-group rg-devops-demo \
-            --image yhaodevopsacr.azurecr.io/repos-web:$imageTag \
-            --set-env-vars API_BASE_URL=https://demo-api-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io VITE_ENV=Testbed
-
-    - bash: |
-        set -e
-        imageTag="git-$(shortSha)"
-        mkdir -p image-info
-        echo "{\"apiImage\":\"yhaodevopsacr.azurecr.io/repos-api:$imageTag\",\"webImage\":\"yhaodevopsacr.azurecr.io/repos-web:$imageTag\",\"tag\":\"$imageTag\",\"commit\":\"$(Build.SourceVersion)\",\"buildId\":\"$(Build.BuildId)\"}" > image-info/image.json
-        echo "az pipelines run --name pipeline-prod --resources pipelines.test_build.runId=$(Build.BuildId)" > image-info/prod-trigger.txt
-        echo "生成 prod 触发命令："
-        cat image-info/prod-trigger.txt
-      displayName: Generate image-info and prod trigger
-
-    - task: PublishPipelineArtifact@1
-      inputs:
-        targetPath: image-info
-        artifact: image-info
-
-    # Smoke test temporarily removed — re-enable after debugging
-
+          az containerapp update \
+            --name demo-web-testbed \
+            --resource-group $rg \
+            --image $(acrLoginServer)/$(webImageName):$(imageTag) \
+            --set-env-vars \
+              API_BASE_URL=https://demo-api-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io \
+              VITE_ENV=Testbed

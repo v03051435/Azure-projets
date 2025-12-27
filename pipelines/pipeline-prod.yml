@@ -9,14 +9,16 @@ resources:
 stages:
 - stage: promote_prod
   displayName: Promote to PROD
-  environment: prod   # 🔐 ADO 里加审批
-  jobs:
 
-  # -------- Resolve tag & release notes --------
+  jobs:
+  # =====================================================
+  # JOB 1 - Resolve image tag + release notes
+  # =====================================================
   - job: prepare
     displayName: Resolve tag & release notes
     pool:
       vmImage: ubuntu-latest
+
     steps:
     - checkout: self
 
@@ -26,16 +28,27 @@ stages:
     - bash: |
         set -e
         tag=$(jq -r .tag $(Pipeline.Workspace)/test_build/image-info/image.json)
-        echo "Promoting tag=$tag"
-        echo "##vso[task.setvariable variable=ResolvedImageTag;isOutput=true]$tag"
+        if [ -z "$tag" ] || [ "$tag" = "null" ]; then
+          echo "ERROR: Cannot resolve image tag from artifact"
+          exit 1
+        fi
+        echo "Resolved tag=$tag"
+
+        # 当前 job 可用
+        echo "##vso[task.setvariable variable=ResolvedImageTag]$tag"
+        # 给下一个 job 用
+        echo "##vso[task.setvariable variable=imageTag;isOutput=true]$tag"
       name: resolve
       displayName: Resolve image tag
 
     - bash: |
+        set -e
+        echo "Generating release notes"
         git fetch --tags --prune || true
         git log -n 30 --pretty=format:"%h %s" > release-notes.txt
         echo "" >> release-notes.txt
         echo "Image tag: $(ResolvedImageTag)" >> release-notes.txt
+        cat release-notes.txt
       displayName: Generate release notes
 
     - task: PublishPipelineArtifact@1
@@ -43,35 +56,54 @@ stages:
         targetPath: release-notes.txt
         artifact: release-notes
 
-  # -------- Deploy PROD --------
-  - job: deploy
+  # =====================================================
+  # JOB 2 - Deploy PROD (with Approval)
+  # =====================================================
+  - deployment: deploy_prod
+    displayName: Deploy to PROD
     dependsOn: prepare
-    variables:
-      imageTag: ${{ dependencies.prepare.outputs['resolve.ResolvedImageTag'] }}
+    environment: prod   # ✅ 只有 deployment job 才能用 environment
     pool:
       vmImage: ubuntu-latest
-    steps:
-    - task: AzureCLI@2
-      displayName: Deploy PROD
-      inputs:
-        azureSubscription: sc-azure-rm
-        scriptType: bash
-        scriptLocation: inlineScript
-        inlineScript: |
-          set -e
-          az acr login --name yhaodevopsacr
-          rg=rg-devops-demo
 
-          az containerapp update \
-            --name demo-api-prod \
-            --resource-group $rg \
-            --image yhaodevopsacr.azurecr.io/repos-api:$(imageTag) \
-            --set-env-vars ASPNETCORE_ENVIRONMENT=Production
+    variables:
+      finalImageTag: ${{ dependencies.prepare.outputs['resolve.imageTag'] }}
 
-          az containerapp update \
-            --name demo-web-prod \
-            --resource-group $rg \
-            --image yhaodevopsacr.azurecr.io/repos-web:$(imageTag) \
-            --set-env-vars \
-              API_BASE_URL=https://demo-api-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io \
-              VITE_ENV=Production
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureCLI@2
+            displayName: Deploy API & WEB to PROD
+            inputs:
+              azureSubscription: sc-azure-rm
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -e
+                tag="$(finalImageTag)"
+                if [ -z "$tag" ]; then
+                  echo "ERROR: finalImageTag is empty"
+                  exit 1
+                fi
+
+                echo "Deploying PROD with tag=$tag"
+
+                az acr login --name yhaodevopsacr
+                rg=rg-devops-demo
+
+                az containerapp update \
+                  --name demo-api-prod \
+                  --resource-group $rg \
+                  --image yhaodevopsacr.azurecr.io/repos-api:$tag \
+                  --set-env-vars ASPNETCORE_ENVIRONMENT=Production
+
+                az containerapp update \
+                  --name demo-web-prod \
+                  --resource-group $rg \
+                  --image yhaodevopsacr.azurecr.io/repos-web:$tag \
+                  --set-env-vars \
+                    API_BASE_URL=https://demo-api-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io \
+                    VITE_ENV=Production
+
+                echo "✅ PROD deployment completed: $tag"

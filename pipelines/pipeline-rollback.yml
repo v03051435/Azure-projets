@@ -1,63 +1,90 @@
 trigger: none   # 只允许手动执行
+resources:
+  pipelines:
+    - pipeline: test_build
+      source: pipeline-test
+      trigger: none
 parameters:
+- name: useArtifact
+  displayName: Use image-info artifact to resolve tag
+  type: boolean
+  default: true
 - name: imageTag
-  displayName: Image tag to rollback to (REQUIRED)
+  displayName: Image tag to rollback to (used when useArtifact=false)
   type: string
   default: ''
 stages:
 - stage: rollback_prod
   displayName: Rollback PROD
   jobs:
-  - job: rollback
-    displayName: Rollback API & WEB to selected tag
+  - job: prepare
+    displayName: Resolve tag for rollback
     pool:
       vmImage: ubuntu-latest
     steps:
-    - task: AzureCLI@2
-      displayName: Rollback PROD to selected image tag
-      inputs:
-        azureSubscription: sc-azure-rm
-        scriptType: bash
-        scriptLocation: inlineScript
-        inlineScript: |
-          set -e
-          imageTag="${{ parameters.imageTag }}"
-          if [ -z "$imageTag" ]; then
-            echo "❌ ERROR: imageTag is required for rollback"
+    - download: test_build
+      artifact: image-info
+      displayName: Download image-info from test_build (optional)
+      continueOnError: true
+
+    - bash: |
+        set -e
+        artifact_json="$(Pipeline.Workspace)/test_build/image-info/image.json"
+
+        tag=""
+        if [ "${{ parameters.useArtifact }}" = "true" ]; then
+          if [ -f "$artifact_json" ]; then
+            tag=$(python -c 'import json,os;print(json.load(open(os.environ["ARTIFACT_JSON"])).get("tag",""))' || true)
+          fi
+          if [ -z "$tag" ]; then
+            echo "ERROR: useArtifact=true but artifact tag not found."
             exit 1
           fi
-          echo "🔁 Rolling back PROD to imageTag=$imageTag"
-          # ---- check tag exists in ACR ----
-          az acr login --name yhaodevopsacr
-          api_ok=$(az acr repository show-tags \
-            --name yhaodevopsacr \
-            --repository repos-api \
-            --query "contains(@, '$imageTag')" -o tsv)
-          web_ok=$(az acr repository show-tags \
-            --name yhaodevopsacr \
-            --repository repos-web \
-            --query "contains(@, '$imageTag')" -o tsv)
-          if [ "$api_ok" != "true" ] || [ "$web_ok" != "true" ]; then
-            echo "❌ ERROR: tag $imageTag not found in ACR"
-            echo "Available API tags:"
-            az acr repository show-tags --name yhaodevopsacr --repository repos-api --top 20
-            echo "Available WEB tags:"
-            az acr repository show-tags --name yhaodevopsacr --repository repos-web --top 20
+        else
+          tag="${{ parameters.imageTag }}"
+          if [ -z "$tag" ]; then
+            echo "ERROR: imageTag is required when useArtifact=false"
             exit 1
           fi
-          rg=rg-devops-demo
-          # ---- rollback API ----
-          az containerapp update \
-            --name demo-api-prod \
-            --resource-group $rg \
-            --image yhaodevopsacr.azurecr.io/repos-api:$imageTag \
-            --set-env-vars ASPNETCORE_ENVIRONMENT=Production
-          # ---- rollback WEB ----
-          az containerapp update \
-            --name demo-web-prod \
-            --resource-group $rg \
-            --image yhaodevopsacr.azurecr.io/repos-web:$imageTag \
-            --set-env-vars \
-              API_BASE_URL=https://demo-api-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io \
-              VITE_ENV=Production
-          echo "✅ Rollback completed successfully → $imageTag"
+        fi
+
+        echo "Resolved rollback tag: $tag"
+        echo "##vso[task.setvariable variable=RollbackTag;isOutput=true]$tag"
+      env:
+        ARTIFACT_JSON: $(Pipeline.Workspace)/test_build/image-info/image.json
+      name: resolve_tag
+
+  - deployment: rollback
+    displayName: Rollback API & WEB to selected tag
+    dependsOn: prepare
+    environment: prod
+    pool:
+      vmImage: ubuntu-latest
+    variables:
+      finalImageTag: $[ dependencies.prepare.outputs['resolve_tag.RollbackTag'] ]
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - bash: |
+              set -e
+              tag="$(finalImageTag)"
+              if [ -z "$tag" ]; then
+                echo "ERROR: finalImageTag is empty"
+                exit 1
+              fi
+
+              az acr login --name yhaodevopsacr
+              rg=rg-devops-demo
+
+              api_ok=$(az acr repository show-tags --name yhaodevopsacr --repository repos-api --query "contains(@, '$tag')" -o tsv)
+              web_ok=$(az acr repository show-tags --name yhaodevopsacr --repository repos-web --query "contains(@, '$tag')" -o tsv)
+              if [ "$api_ok" != "true" ] || [ "$web_ok" != "true" ]; then
+                echo "ERROR: tag $tag not found in ACR"
+                exit 1
+              fi
+
+              az containerapp update --name demo-api-prod --resource-group $rg --image yhaodevopsacr.azurecr.io/repos-api:$tag
+              az containerapp update --name demo-web-prod --resource-group $rg --image yhaodevopsacr.azurecr.io/repos-web:$tag
+
+              echo "✅ Rollback completed to $tag"

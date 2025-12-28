@@ -55,12 +55,12 @@ stages:
               repo=s.get('repo')
               path=s.get('buildPath')
               if path:
-                  print(f"BUILD::{repo}::{path}")
+                  print(f"BUILD|{repo}|{path}")
               else:
-                  print(f"SKIP::{repo}")
+                  print(f"SKIP|{repo}|")
           PY
           
-          while IFS='::' read -r kind repo path; do
+          while IFS='|' read -r kind repo path; do
             if [ "$kind" = "BUILD" ]; then
               echo "Building $repo from $path"
               docker build -t "$ACR/$repo:$TAG" "$path"
@@ -76,9 +76,9 @@ stages:
               repo=s.get('repo')
               path=s.get('buildPath')
               if path:
-                  print('BUILD::'+repo+'::'+path)
+                  print('BUILD|'+repo+'|'+path)
               else:
-                  print('SKIP::'+repo+'::')
+                  print('SKIP|'+repo+'|')
           PY)
 
     - bash: |

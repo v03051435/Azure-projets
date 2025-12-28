@@ -1,0 +1,98 @@
+parameters:
+- name: action
+  type: string
+  default: deploy
+- name: tag
+  type: string
+  default: ''
+- name: acrName
+  type: string
+  default: yhaodevopsacr
+- name: acrLoginServer
+  type: string
+  default: yhaodevopsacr.azurecr.io
+- name: rg
+  type: string
+  default: rg-devops-demo
+- name: env
+  type: string
+  default: testbed
+- name: servicesFile
+  type: string
+  default: pipelines/services.json
+
+steps:
+- task: AzureCLI@2
+  ${{ if eq(parameters.action, 'deploy') }}:
+    displayName: Deploy services
+  ${{ else }}:
+    displayName: Rollback services
+  inputs:
+    azureSubscription: sc-azure-rm
+    scriptType: bash
+    scriptLocation: inlineScript
+    inlineScript: |
+      set -e
+
+      tag="${{ parameters.tag }}"
+      if [ -z "$tag" ]; then
+        echo "❌ ERROR: tag is required"
+        exit 1
+      fi
+
+      echo "🔁 ${{ parameters.action }} to tag=$tag (env=${{ parameters.env }})"
+
+      az acr login --name ${{ parameters.acrName }}
+
+      # read services from JSON file (requires repo checkout)
+      if [ ! -f "${{ parameters.servicesFile }}" ]; then
+        echo "❌ ERROR: services file not found: ${{ parameters.servicesFile }}"
+        exit 1
+      fi
+
+      services_lines=$(python - <<'PY'
+      import json,sys
+      with open('${{ parameters.servicesFile }}') as f:
+          data=json.load(f)
+      svc_list=data.get('${{ parameters.env }}', [])
+      for s in svc_list:
+          repo=s.get('repo','')
+          app=s.get('appName','')
+          env=s.get('envVars','')
+          print(repo + '||' + app + '||' + env)
+      PY
+      )
+
+      missing=false
+      while IFS='||' read -r repo app envVars; do
+        if [ -z "$repo" ] || [ -z "$app" ]; then
+          continue
+        fi
+        echo "Checking tag in repository: $repo"
+        ok=$(az acr repository show-tags --name ${{ parameters.acrName }} --repository "$repo" --query "contains(@, '$tag')" -o tsv)
+        if [ "$ok" != "true" ]; then
+          echo "❌ ERROR: tag $tag not found in repository $repo"
+          echo "Available tags (top 20):"
+          az acr repository show-tags --name ${{ parameters.acrName }} --repository "$repo" --top 20
+          missing=true
+        fi
+      done <<< "$services_lines"
+
+      if [ "$missing" = true ]; then
+        echo "❌ ERROR: one or more repositories do not contain tag $tag"
+        exit 1
+      fi
+
+      rg=${{ parameters.rg }}
+
+      while IFS='||' read -r repo app envVars; do
+        if [ -z "$repo" ] || [ -z "$app" ]; then
+          continue
+        fi
+        echo "Updating $app from repo $repo"
+        cmd=(az containerapp update --name "$app" --resource-group "$rg" --image "${{ parameters.acrLoginServer }}/$repo:$tag")
+        if [ -n "$envVars" ]; then
+          cmd+=(--set-env-vars $envVars)
+        fi
+        "${cmd[@]}"
+      done <<< "$services_lines"

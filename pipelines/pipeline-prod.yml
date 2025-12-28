@@ -73,38 +73,10 @@ stages:
       runOnce:
         deploy:
           steps:
-          - task: AzureCLI@2
-            displayName: Deploy API & WEB to PROD
-            inputs:
-              azureSubscription: sc-azure-rm
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                set -e
-
-                tag="$(finalImageTag)"
-                if [ -z "$tag" ]; then
-                  echo "ERROR: finalImageTag is empty"
-                  exit 1
-                fi
-
-                echo "Deploying PROD with tag=$tag"
-
-                az acr login --name yhaodevopsacr
-                rg=rg-devops-demo
-
-                az containerapp update \
-                  --name demo-api-prod \
-                  --resource-group $rg \
-                  --image yhaodevopsacr.azurecr.io/repos-api:$tag \
-                  --set-env-vars ASPNETCORE_ENVIRONMENT=Production
-
-                az containerapp update \
-                  --name demo-web-prod \
-                  --resource-group $rg \
-                  --image yhaodevopsacr.azurecr.io/repos-web:$tag \
-                  --set-env-vars \
-                    API_BASE_URL=https://demo-api-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io \
-                    VITE_ENV=Production
-
-                echo "✅ PROD deployment completed: $tag"
+          - checkout: self
+          - template: templates/service-deployer.yml
+            parameters:
+              action: deploy
+              tag: $[ dependencies.prepare.outputs['resolve.imageTag'] ]
+              env: prod
+              servicesFile: pipelines/services.json

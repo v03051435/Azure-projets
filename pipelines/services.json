@@ -1,0 +1,28 @@
+{
+  "testbed": [
+    {
+      "repo": "repos-api",
+      "appName": "demo-api-testbed",
+      "envVars": "ASPNETCORE_ENVIRONMENT=Testbed",
+      "buildPath": "AzureWebAp"
+    },
+    {
+      "repo": "repos-web",
+      "appName": "demo-web-testbed",
+      "envVars": "API_BASE_URL=https://demo-api-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io VITE_ENV=Testbed",
+      "buildPath": "AzureReactApp"
+    }
+  ],
+  "prod": [
+    {
+      "repo": "repos-api",
+      "appName": "demo-api-prod",
+      "envVars": "ASPNETCORE_ENVIRONMENT=Production"
+    },
+    {
+      "repo": "repos-web",
+      "appName": "demo-web-prod",
+      "envVars": "API_BASE_URL=https://demo-api-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io VITE_ENV=Production"
+    }
+  ]
+}

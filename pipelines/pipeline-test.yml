@@ -27,7 +27,7 @@ stages:
     - checkout: self
 
     - task: AzureCLI@2
-      displayName: Build & Push API + WEB
+      displayName: Build & Push images from services.json
       inputs:
         azureSubscription: sc-azure-rm
         scriptType: bash
@@ -36,11 +36,50 @@ stages:
           set -e
           az acr login --name $(acrName)
 
-          docker build -t $(acrLoginServer)/$(apiImageName):$(imageTag) $(apiPath)
-          docker push $(acrLoginServer)/$(apiImageName):$(imageTag)
+          TAG="$(imageTag)"
+          ACR="$(acrLoginServer)"
+          SERVICES_FILE="pipelines/services.json"
 
-          docker build -t $(acrLoginServer)/$(webImageName):$(imageTag) $(webPath)
-          docker push $(acrLoginServer)/$(webImageName):$(imageTag)
+          if [ ! -f "$SERVICES_FILE" ]; then
+            echo "❌ ERROR: $SERVICES_FILE not found"
+            exit 1
+          fi
+
+          echo "Discovering services to build for testbed..."
+          python - <<'PY'
+          import json,os,sys
+          with open('pipelines/services.json') as f:
+              data=json.load(f)
+          services=data.get('testbed', [])
+          for s in services:
+              repo=s.get('repo')
+              path=s.get('buildPath')
+              if path:
+                  print(f"BUILD|{repo}|{path}")
+              else:
+                  print(f"SKIP|{repo}|")
+          PY
+          
+          while IFS='|' read -r kind repo path; do
+            if [ "$kind" = "BUILD" ]; then
+              echo "Building $repo from $path"
+              docker build -t "$ACR/$repo:$TAG" "$path"
+              docker push "$ACR/$repo:$TAG"
+            else
+              echo "Skipping $repo (no buildPath)"
+            fi
+          done < <(python - <<'PY'
+          import json
+          with open('pipelines/services.json') as f:
+              data=json.load(f)
+          for s in data.get('testbed', []):
+              repo=s.get('repo')
+              path=s.get('buildPath')
+              if path:
+                  print('BUILD|'+repo+'|'+path)
+              else:
+                  print('SKIP|'+repo+'|')
+          PY)
 
     - bash: |
         mkdir -p image-info
@@ -61,28 +100,10 @@ stages:
     pool:
       vmImage: ubuntu-latest
     steps:
-    - task: AzureCLI@2
-      displayName: Deploy API & WEB to TESTBED
-      inputs:
-        azureSubscription: sc-azure-rm
-        scriptType: bash
-        scriptLocation: inlineScript
-        inlineScript: |
-          set -e
-          az acr login --name $(acrName)
-
-          rg=rg-devops-demo
-
-          az containerapp update \
-            --name demo-api-testbed \
-            --resource-group $rg \
-            --image $(acrLoginServer)/$(apiImageName):$(imageTag) \
-            --set-env-vars ASPNETCORE_ENVIRONMENT=Testbed
-
-          az containerapp update \
-            --name demo-web-testbed \
-            --resource-group $rg \
-            --image $(acrLoginServer)/$(webImageName):$(imageTag) \
-            --set-env-vars \
-              API_BASE_URL=https://demo-api-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io \
-              VITE_ENV=Testbed
+    - checkout: self
+    - template: templates/service-deployer.yml
+      parameters:
+        action: deploy
+        tag: $(imageTag)
+        env: testbed
+        servicesFile: pipelines/services.json

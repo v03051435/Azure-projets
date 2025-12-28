@@ -34,194 +34,24 @@ steps:
     azureSubscription: sc-azure-rm
     scriptType: bash
     scriptLocation: inlineScript
-    inlineScript: |
-      python - <<'PY'
-      import json
-      import shlex
-      import subprocess
-      import sys
-      import time
-      import urllib.request
-      import urllib.error
-
-      ACTION = r"${{ parameters.action }}"
-      TAG = r"${{ parameters.tag }}"
-      ACR_NAME = r"${{ parameters.acrName }}"
-      ACR_LOGIN_SERVER = r"${{ parameters.acrLoginServer }}"
-      RG = r"${{ parameters.rg }}"
-      ENV = r"${{ parameters.env }}"
-      SERVICES_FILE = r"${{ parameters.servicesFile }}"
-      DRY_RUN_RAW = r"${{ parameters.dryRun }}"
-
-      def parse_bool(val):
-          if isinstance(val, bool):
-              return val
-          if val is None:
-              return False
-          return str(val).strip().lower() in ("1", "true", "yes", "y", "on")
-
-      DRY_RUN = parse_bool(DRY_RUN_RAW)
-
-      def join_cmd(cmd):
-          try:
-              return shlex.join(cmd)
-          except AttributeError:
-              return " ".join(shlex.quote(c) for c in cmd)
-
-      def run(cmd):
-          print(f"CMD: {join_cmd(cmd)}")
-          if DRY_RUN:
-              return
-          subprocess.run(cmd, check=True)
-
-      if not TAG:
-          print("ERROR: tag is required", file=sys.stderr)
-          sys.exit(1)
-
-      print(f"Action={ACTION} tag={TAG} env={ENV} dryRun={DRY_RUN}")
-
-      run(["az", "acr", "login", "--name", ACR_NAME])
-
-      try:
-          with open(SERVICES_FILE, "r", encoding="utf-8") as f:
-              data = json.load(f)
-      except FileNotFoundError:
-          print(f"ERROR: services file not found: {SERVICES_FILE}", file=sys.stderr)
-          sys.exit(1)
-
-      services = data.get("services", {})
-      if not services:
-          print("No services found.")
-          sys.exit(0)
-
-      def get_env_vars(env_vars):
-          if not env_vars:
-              return []
-          if isinstance(env_vars, list):
-              return env_vars
-          return shlex.split(str(env_vars))
-
-      missing_tag = False
-      deploy_targets = []
-
-      for name, svc in services.items():
-          repo = (svc.get("repo") or "").strip()
-          if not repo:
-              print(f"Skipping {name} (missing repo)")
-              continue
-
-          if parse_bool(svc.get("skip", False)):
-              print(f"Skipping {name} (service skip=true)")
-              continue
-
-          deploy_cfg = (svc.get("deploy") or {}).get(ENV)
-          if not deploy_cfg:
-              print(f"Skipping {name} (no deploy config for env={ENV})")
-              continue
-
-          if parse_bool(deploy_cfg.get("skip", False)):
-              print(f"Skipping {name} (env skip=true)")
-              continue
-
-          app = (deploy_cfg.get("appName") or "").strip()
-          if not app:
-              print(f"ERROR: {name} missing appName for env={ENV}", file=sys.stderr)
-              sys.exit(1)
-
-          if not DRY_RUN:
-              print(f"Checking tag in repository: {repo}")
-              ok = subprocess.check_output(
-                  [
-                      "az",
-                      "acr",
-                      "repository",
-                      "show-tags",
-                      "--name",
-                      ACR_NAME,
-                      "--repository",
-                      repo,
-                      "--query",
-                      f"contains(@, '{TAG}')",
-                      "-o",
-                      "tsv",
-                  ],
-                  text=True,
-              ).strip()
-              if ok != "true":
-                  print(f"ERROR: tag {TAG} not found in repository {repo}", file=sys.stderr)
-                  print("Available tags (top 20):")
-                  run(
-                      [
-                          "az",
-                          "acr",
-                          "repository",
-                          "show-tags",
-                          "--name",
-                          ACR_NAME,
-                          "--repository",
-                          repo,
-                          "--top",
-                          "20",
-                      ]
-                  )
-                  missing_tag = True
-
-          deploy_targets.append((name, repo, app, deploy_cfg))
-
-      if missing_tag:
-          print(f"ERROR: one or more repositories do not contain tag {TAG}", file=sys.stderr)
-          sys.exit(1)
-
-      def run_health_check(name, health_cfg):
-          if not health_cfg:
-              return
-          if parse_bool(health_cfg.get("skip", False)):
-              print(f"Health check skipped for {name}")
-              return
-
-          url = (health_cfg.get("url") or "").strip()
-          if not url:
-              print(f"Health check skipped for {name} (empty url)")
-              return
-
-          expected = int(health_cfg.get("expectedStatus", 200))
-          retries = int(health_cfg.get("retries", 12))
-          delay = int(health_cfg.get("delaySeconds", 5))
-
-          print(f"Health check for {name}: {url} expect={expected} retries={retries}")
-          last_err = ""
-          for _ in range(retries):
-              try:
-                  with urllib.request.urlopen(url, timeout=10) as resp:
-                      status = resp.getcode()
-                  if status == expected:
-                      print(f"Health check passed for {name} (status={status})")
-                      return
-                  last_err = f"status={status}"
-              except Exception as e:
-                  last_err = str(e)
-              time.sleep(delay)
-
-          print(f"ERROR: health check failed for {name}: {last_err}", file=sys.stderr)
-          sys.exit(1)
-
-      for name, repo, app, deploy_cfg in deploy_targets:
-          env_vars = get_env_vars(deploy_cfg.get("envVars"))
-          cmd = [
-              "az",
-              "containerapp",
-              "update",
-              "--name",
-              app,
-              "--resource-group",
-              RG,
-              "--image",
-              f"{ACR_LOGIN_SERVER}/{repo}:{TAG}",
-          ]
-          if env_vars:
-              cmd += ["--set-env-vars"] + env_vars
-          run(cmd)
-
-          if not DRY_RUN and ACTION == "deploy":
-              run_health_check(name, deploy_cfg.get("healthCheck"))
-      PY
+    ${{ if eq(parameters.dryRun, true) }}:
+      inlineScript: |
+        python pipelines/scripts/deploy.py \
+          --action "${{ parameters.action }}" \
+          --tag "${{ parameters.tag }}" \
+          --acr-name "${{ parameters.acrName }}" \
+          --acr-login-server "${{ parameters.acrLoginServer }}" \
+          --rg "${{ parameters.rg }}" \
+          --env "${{ parameters.env }}" \
+          --services-file "${{ parameters.servicesFile }}" \
+          --dry-run
+    ${{ else }}:
+      inlineScript: |
+        python pipelines/scripts/deploy.py \
+          --action "${{ parameters.action }}" \
+          --tag "${{ parameters.tag }}" \
+          --acr-name "${{ parameters.acrName }}" \
+          --acr-login-server "${{ parameters.acrLoginServer }}" \
+          --rg "${{ parameters.rg }}" \
+          --env "${{ parameters.env }}" \
+          --services-file "${{ parameters.servicesFile }}"

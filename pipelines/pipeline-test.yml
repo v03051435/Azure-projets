@@ -45,41 +45,55 @@ stages:
             exit 1
           fi
 
-          echo "Discovering services to build for testbed..."
+          echo "Discovering services to build..."
+          export TAG ACR SERVICES_FILE
           python - <<'PY'
-          import json,os,sys
-          with open('pipelines/services.json') as f:
-              data=json.load(f)
-          services=data.get('testbed', [])
-          for s in services:
-              repo=s.get('repo')
-              path=s.get('buildPath')
-              if path:
-                  print(f"BUILD|{repo}|{path}")
-              else:
-                  print(f"SKIP|{repo}|")
-          PY
-          
-          while IFS='|' read -r kind repo path; do
-            if [ "$kind" = "BUILD" ]; then
-              echo "Building $repo from $path"
-              docker build -t "$ACR/$repo:$TAG" "$path"
-              docker push "$ACR/$repo:$TAG"
-            else
-              echo "Skipping $repo (no buildPath)"
-            fi
-          done < <(python - <<'PY'
           import json
-          with open('pipelines/services.json') as f:
-              data=json.load(f)
-          for s in data.get('testbed', []):
-              repo=s.get('repo')
-              path=s.get('buildPath')
-              if path:
-                  print('BUILD|'+repo+'|'+path)
-              else:
-                  print('SKIP|'+repo+'|')
-          PY)
+          import os
+          import subprocess
+          import sys
+
+          tag = os.environ.get("TAG", "")
+          acr = os.environ.get("ACR", "")
+          services_file = os.environ.get("SERVICES_FILE", "pipelines/services.json")
+
+          if not tag:
+              print("ERROR: TAG is empty", file=sys.stderr)
+              sys.exit(1)
+          if not acr:
+              print("ERROR: ACR is empty", file=sys.stderr)
+              sys.exit(1)
+
+          try:
+              with open(services_file, "r", encoding="utf-8") as f:
+                  data = json.load(f)
+          except FileNotFoundError:
+              print(f"ERROR: {services_file} not found", file=sys.stderr)
+              sys.exit(1)
+
+          services = data.get("services", {})
+          if not services:
+              print("No services found to build.")
+              sys.exit(0)
+
+          for name, svc in services.items():
+              repo = svc.get("repo", "").strip()
+              build = svc.get("build", {}) or {}
+              path = (build.get("path") or "").strip()
+              skip = bool(build.get("skip", False))
+
+              if skip:
+                  print(f"Skipping build for {name} (skip=true)")
+                  continue
+              if not repo or not path:
+                  print(f"Skipping build for {name} (missing repo/path)")
+                  continue
+
+              image = f"{acr}/{repo}:{tag}"
+              print(f"Building {name} ({repo}) from {path}")
+              subprocess.run(["docker", "build", "-t", image, path], check=True)
+              subprocess.run(["docker", "push", image], check=True)
+          PY
 
     - bash: |
         mkdir -p image-info

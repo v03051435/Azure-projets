@@ -1,28 +1,70 @@
 {
-  "testbed": [
-    {
+  "services": {
+    "api": {
       "repo": "repos-api",
-      "appName": "demo-api-testbed",
-      "envVars": "ASPNETCORE_ENVIRONMENT=Testbed",
-      "buildPath": "AzureWebAp"
+      "build": {
+        "path": "AzureWebAp",
+        "skip": false
+      },
+      "deploy": {
+        "testbed": {
+          "appName": "demo-api-testbed",
+          "envVars": "ASPNETCORE_ENVIRONMENT=Testbed",
+          "skip": false,
+          "healthCheck": {
+            "skip": true,
+            "url": "",
+            "expectedStatus": 200,
+            "retries": 12,
+            "delaySeconds": 5
+          }
+        },
+        "prod": {
+          "appName": "demo-api-prod",
+          "envVars": "ASPNETCORE_ENVIRONMENT=Production",
+          "skip": false,
+          "healthCheck": {
+            "skip": true,
+            "url": "",
+            "expectedStatus": 200,
+            "retries": 12,
+            "delaySeconds": 5
+          }
+        }
+      }
     },
-    {
+    "web": {
       "repo": "repos-web",
-      "appName": "demo-web-testbed",
-      "envVars": "API_BASE_URL=https://demo-api-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io VITE_ENV=Testbed",
-      "buildPath": "AzureReactApp"
+      "build": {
+        "path": "AzureReactApp",
+        "skip": false
+      },
+      "deploy": {
+        "testbed": {
+          "appName": "demo-web-testbed",
+          "envVars": "API_BASE_URL=https://demo-api-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io VITE_ENV=Testbed",
+          "skip": false,
+          "healthCheck": {
+            "skip": true,
+            "url": "",
+            "expectedStatus": 200,
+            "retries": 12,
+            "delaySeconds": 5
+          }
+        },
+        "prod": {
+          "appName": "demo-web-prod",
+          "envVars": "API_BASE_URL=https://demo-api-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io VITE_ENV=Production",
+          "skip": false,
+          "healthCheck": {
+            "skip": true,
+            "url": "",
+            "expectedStatus": 200,
+            "retries": 12,
+            "delaySeconds": 5
+          }
+        }
+      }
     }
-  ],
-  "prod": [
-    {
-      "repo": "repos-api",
-      "appName": "demo-api-prod",
-      "envVars": "ASPNETCORE_ENVIRONMENT=Production"
-    },
-    {
-      "repo": "repos-web",
-      "appName": "demo-web-prod",
-      "envVars": "API_BASE_URL=https://demo-api-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io VITE_ENV=Production"
-    }
-  ]
+  }
 }

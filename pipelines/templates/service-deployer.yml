@@ -59,12 +59,12 @@ steps:
           repo=s.get('repo','')
           app=s.get('appName','')
           env=s.get('envVars','')
-          print(repo + '||' + app + '||' + env)
+          print(repo + '\t' + app + '\t' + env)
       PY
       )
 
       missing=false
-      while IFS='||' read -r repo app envVars; do
+      while IFS=$'\t' read -r repo app envVars; do
         if [ -z "$repo" ] || [ -z "$app" ]; then
           continue
         fi
@@ -85,7 +85,7 @@ steps:
 
       rg=${{ parameters.rg }}
 
-      while IFS='||' read -r repo app envVars; do
+      while IFS=$'\t' read -r repo app envVars; do
         if [ -z "$repo" ] || [ -z "$app" ]; then
           continue
         fi
@@ -94,5 +94,8 @@ steps:
         if [ -n "$envVars" ]; then
           cmd+=(--set-env-vars $envVars)
         fi
+        printf 'CMD: '
+        printf '%q ' "${cmd[@]}"
+        echo
         "${cmd[@]}"
       done <<< "$services_lines"

@@ -23,7 +23,11 @@ parameters:
 
 steps:
 - task: AzureCLI@2
-  displayName: ${{ parameters.action == 'deploy' && 'Deploy services' || 'Rollback services' }}
+  ${{ if eq(parameters.action, 'deploy') }}:
+    displayName: Deploy services
+  ${{ else }}:
+    displayName: Rollback services
+  ${{ end }}
   inputs:
     azureSubscription: sc-azure-rm
     scriptType: bash

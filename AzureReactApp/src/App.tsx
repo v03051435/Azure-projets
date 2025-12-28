@@ -44,7 +44,7 @@ function App() {
     <>
       <section>
         <section className="header">
-          <h1>Azure React App : 最新分层版!!!</h1>
+          <h1>Azure React App : 进阶版!!!</h1>
           <p className="muted">
             OK
           </p>

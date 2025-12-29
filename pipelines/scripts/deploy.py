@@ -22,6 +22,14 @@ def join_cmd(cmd):
         return " ".join(shlex.quote(c) for c in cmd)
 
 
+def get_env_vars(env_vars):
+    if not env_vars:
+        return []
+    if isinstance(env_vars, list):
+        return env_vars
+    return shlex.split(str(env_vars))
+
+
 def run_cmd(cmd, dry_run, retries=0, delay_seconds=20):
     print(f"CMD: {join_cmd(cmd)}")
     if dry_run:
@@ -123,6 +131,9 @@ def main():
 
     for name, repo, app, deploy_cfg in deploy_targets:
         image = f"{args.acr_login_server}/{repo}:{args.tag}"
+        env_vars = (
+            get_env_vars(deploy_cfg.get("envVars")) if name == "web" else []
+        )
         cmd = [
             "az",
             "containerapp",
@@ -135,6 +146,8 @@ def main():
             image,
             "--no-wait",
         ]
+        if env_vars:
+            cmd += ["--set-env-vars"] + env_vars
         run_cmd(cmd, args.dry_run, retries=8, delay_seconds=20)
 
     return 0

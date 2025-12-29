@@ -33,6 +33,39 @@
         }
       }
     },
+    "api2": {
+      "repo": "repos-api2",
+      "build": {
+        "path": "AzureWebApi2",
+        "skip": false
+      },
+      "deploy": {
+        "testbed": {
+          "appName": "demo-api2-testbed",
+          "envVars": "ASPNETCORE_ENVIRONMENT=Testbed",
+          "skip": false,
+          "healthCheck": {
+            "skip": true,
+            "url": "",
+            "expectedStatus": 200,
+            "retries": 12,
+            "delaySeconds": 5
+          }
+        },
+        "prod": {
+          "appName": "demo-api2-prod",
+          "envVars": "ASPNETCORE_ENVIRONMENT=Production",
+          "skip": false,
+          "healthCheck": {
+            "skip": true,
+            "url": "",
+            "expectedStatus": 200,
+            "retries": 12,
+            "delaySeconds": 5
+          }
+        }
+      }
+    },
     "web": {
       "repo": "repos-web",
       "build": {

@@ -80,3 +80,24 @@ stages:
               tag: $(finalImageTag)
               env: prod
               servicesFile: pipelines/services.json
+
+  # =====================================================
+  # JOB 3 - Cleanup old ACR tags (keep latest 5)
+  # =====================================================
+  - job: cleanup_acr
+    displayName: Cleanup old ACR tags
+    dependsOn: deploy_prod
+    condition: succeeded()
+    pool:
+      vmImage: windows-latest
+
+    steps:
+    - checkout: self
+
+    - task: AzureCLI@2
+      displayName: Prune old image tags (keep 5 per repo)
+      inputs:
+        azureSubscription: 'Azure subscription 1'
+        scriptType: 'pscore'
+        scriptLocation: 'scriptPath'
+        scriptPath: '$(System.DefaultWorkingDirectory)/pipelines/scripts/prune_acr_tags.ps1'

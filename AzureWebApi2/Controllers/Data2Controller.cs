@@ -22,7 +22,7 @@ namespace AzureWebApi2.Controllers
         {
             var envName = _env.EnvironmentName;
             var data = new List<DataObject>();
-            for (int i = 1; i <= 10; i++)
+            for (int i = 1; i <= 4; i++)
             {
                 data.Add(new DataObject
                 {

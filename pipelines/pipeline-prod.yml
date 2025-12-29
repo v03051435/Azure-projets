@@ -89,7 +89,7 @@ stages:
     dependsOn: deploy_prod
     condition: succeeded()
     pool:
-      vmImage: windows-latest
+      vmImage: ubuntu-latest
 
     steps:
     - checkout: self
@@ -97,7 +97,7 @@ stages:
     - task: AzureCLI@2
       displayName: Prune old image tags (keep 5 per repo)
       inputs:
-        azureSubscription: 'Azure subscription 1'
+        azureSubscription: 'sc-azure-rm'
         scriptType: 'pscore'
         scriptLocation: 'scriptPath'
         scriptPath: '$(System.DefaultWorkingDirectory)/pipelines/scripts/prune_acr_tags.ps1'

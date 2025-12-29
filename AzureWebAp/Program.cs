@@ -31,7 +31,10 @@ namespace AzureWebAp
             }
 
             app.UseCors();
-            app.UseHttpsRedirection();
+            if (app.Environment.IsDevelopment())
+            {
+                app.UseHttpsRedirection();
+            }
 
             app.UseAuthorization();
 

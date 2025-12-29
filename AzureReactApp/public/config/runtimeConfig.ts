@@ -1,5 +1,6 @@
 export type AppConfig = {
   API_BASE_URL: string;
+  API2_BASE_URL: string;
   VITE_ENV?: string;
 };
 
@@ -20,6 +21,9 @@ export async function loadAppConfig(): Promise<AppConfig> {
   if (!cfg.API_BASE_URL || typeof cfg.API_BASE_URL !== "string") {
     throw new Error("API_BASE_URL missing in config.json");
   }
+  if (!cfg.API2_BASE_URL || typeof cfg.API2_BASE_URL !== "string") {
+    throw new Error("API2_BASE_URL missing in config.json");
+  }
 
   window.__APP_CONFIG__ = cfg;
   return cfg;
@@ -27,6 +31,11 @@ export async function loadAppConfig(): Promise<AppConfig> {
 
 export function apiBaseUrl(): string {
   const v = window.__APP_CONFIG__?.API_BASE_URL;
+  if (!v) throw new Error("App config not loaded yet");
+  return v.replace(/\/$/, "");
+}
+export function api2BaseUrl(): string {
+  const v = window.__APP_CONFIG__?.API2_BASE_URL;
   if (!v) throw new Error("App config not loaded yet");
   return v.replace(/\/$/, "");
 }

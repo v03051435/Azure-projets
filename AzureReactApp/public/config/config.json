@@ -1,4 +1,5 @@
 {
   "API_BASE_URL": "${API_BASE_URL}",
+  "API2_BASE_URL": "${API2_BASE_URL}",
   "VITE_ENV": "${VITE_ENV}"
 }

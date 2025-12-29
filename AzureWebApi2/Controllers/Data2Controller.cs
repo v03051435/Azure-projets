@@ -2,16 +2,16 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 
-namespace AzureWebAp.Controllers
+namespace AzureWebApi2.Controllers
 {
     [ApiController]
     [Route("[controller]")]
-    public class DataController : ControllerBase
+    public class Data2Controller : ControllerBase
     {
         private readonly IWebHostEnvironment _env;
         private readonly IConfiguration _config;
 
-        public DataController(IWebHostEnvironment env, IConfiguration config)
+        public Data2Controller(IWebHostEnvironment env, IConfiguration config)
         {
             _env = env;
             _config = config;
@@ -28,7 +28,7 @@ namespace AzureWebAp.Controllers
                 {
                     Id = i,
                     Name = $"Env : {envName}, Item {i}",
-                    Description = $"Api 1 : {i}."
+                    Description = $"Api 2 : {i}."
                 });
             }
             return Ok(data);

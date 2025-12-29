@@ -25,6 +25,33 @@ parameters:
   default: false
 
 steps:
+- ${{ if eq(parameters.action, 'deploy') }}:
+  - task: AzureCLI@2
+    displayName: Provision container apps
+    inputs:
+      azureSubscription: sc-azure-rm
+      scriptType: bash
+      scriptLocation: inlineScript
+      ${{ if eq(parameters.dryRun, true) }}:
+        inlineScript: |
+          python pipelines/scripts/provision.py \
+            --tag "${{ parameters.tag }}" \
+            --acr-name "${{ parameters.acrName }}" \
+            --acr-login-server "${{ parameters.acrLoginServer }}" \
+            --rg "${{ parameters.rg }}" \
+            --env "${{ parameters.env }}" \
+            --services-file "${{ parameters.servicesFile }}" \
+            --dry-run
+      ${{ else }}:
+        inlineScript: |
+          python pipelines/scripts/provision.py \
+            --tag "${{ parameters.tag }}" \
+            --acr-name "${{ parameters.acrName }}" \
+            --acr-login-server "${{ parameters.acrLoginServer }}" \
+            --rg "${{ parameters.rg }}" \
+            --env "${{ parameters.env }}" \
+            --services-file "${{ parameters.servicesFile }}"
+
 - task: AzureCLI@2
   ${{ if eq(parameters.action, 'deploy') }}:
     displayName: Deploy services

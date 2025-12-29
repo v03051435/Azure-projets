@@ -101,4 +101,3 @@ stages:
         scriptType: 'pscore'
         scriptLocation: 'scriptPath'
         scriptPath: '$(System.DefaultWorkingDirectory)/pipelines/scripts/prune_acr_tags.ps1'
-        arguments: '-AcrName yhaodevopsacr -Keep 5 -Repos "repos-api,repos-api2,repos-web"'

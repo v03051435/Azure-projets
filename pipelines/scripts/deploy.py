@@ -65,6 +65,51 @@ def run_cmd(cmd, dry_run, retries=0, delay_seconds=20):
         raise last_err
 
 
+def print_revision_status(app, rg):
+    try:
+        state = subprocess.check_output(
+            [
+                "az",
+                "containerapp",
+                "show",
+                "--name",
+                app,
+                "--resource-group",
+                rg,
+                "--query",
+                "properties.provisioningState",
+                "-o",
+                "tsv",
+            ],
+            text=True,
+        ).strip()
+        print(f"{app} provisioningState: {state}")
+    except subprocess.CalledProcessError:
+        print(f"{app} provisioningState: <unavailable>")
+    try:
+        table = subprocess.check_output(
+            [
+                "az",
+                "containerapp",
+                "revision",
+                "list",
+                "--name",
+                app,
+                "--resource-group",
+                rg,
+                "--query",
+                "[].{name:name,created:properties.createdTime,health:properties.healthState,active:properties.active}",
+                "-o",
+                "table",
+            ],
+            text=True,
+        ).strip()
+        if table:
+            print(f"{app} revisions:\n{table}")
+    except subprocess.CalledProcessError:
+        print(f"{app} revisions: <unavailable>")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--action", default="deploy")
@@ -148,7 +193,11 @@ def main():
         ]
         if env_vars:
             cmd += ["--set-env-vars"] + env_vars
-        run_cmd(cmd, args.dry_run, retries=8, delay_seconds=20)
+        try:
+            run_cmd(cmd, args.dry_run, retries=8, delay_seconds=20)
+        except subprocess.CalledProcessError:
+            print_revision_status(app, args.rg)
+            raise
 
     return 0
 

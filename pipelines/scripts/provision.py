@@ -297,7 +297,7 @@ def main():
         print(f"Creating {name} -> {app}")
         run(cmd, args.dry_run)
 
-    for name, repo, app, deploy_cfg in deploy_targets:
+    for name, repo, app, deploy_cfg in to_create:
         if args.dry_run:
             continue
         ensure_identity(app, args.rg, args.dry_run)

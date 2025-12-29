@@ -23,19 +23,84 @@ def join_cmd(cmd):
         return " ".join(shlex.quote(c) for c in cmd)
 
 
-def run(cmd, dry_run):
-    print(f"CMD: {join_cmd(cmd)}")
-    if dry_run:
-        return
-    subprocess.run(cmd, check=True)
-
-
 def get_env_vars(env_vars):
     if not env_vars:
         return []
     if isinstance(env_vars, list):
         return env_vars
     return shlex.split(str(env_vars))
+
+
+def run_cmd(cmd, dry_run, retries=0, delay_seconds=20):
+    print(f"CMD: {join_cmd(cmd)}")
+    if dry_run:
+        return
+    if retries <= 0:
+        subprocess.run(cmd, check=True)
+        return
+    last_err = None
+    for attempt in range(1, retries + 1):
+        result = subprocess.run(cmd, text=True, capture_output=True)
+        if result.returncode == 0:
+            if result.stdout:
+                print(result.stdout.strip())
+            if result.stderr:
+                print(result.stderr.strip())
+            return
+        msg = (result.stderr or "").lower()
+        if "operationinprogress" in msg:
+            print(
+                f"OperationInProgress, retrying in {delay_seconds}s "
+                f"({attempt}/{retries})"
+            )
+            time.sleep(delay_seconds)
+            continue
+        last_err = subprocess.CalledProcessError(
+            result.returncode,
+            cmd,
+            output=result.stdout,
+            stderr=result.stderr,
+        )
+        break
+    if last_err:
+        raise last_err
+
+
+def wait_for_update(app, rg, expected_image, timeout_seconds=600, interval=10):
+    deadline = time.time() + timeout_seconds
+    last_state = ""
+    last_image = ""
+    while time.time() < deadline:
+        try:
+            raw = subprocess.check_output(
+                [
+                    "az",
+                    "containerapp",
+                    "show",
+                    "--name",
+                    app,
+                    "--resource-group",
+                    rg,
+                    "--query",
+                    "[properties.provisioningState, properties.template.containers[0].image]",
+                    "-o",
+                    "tsv",
+                ],
+                text=True,
+            ).strip()
+            parts = raw.split("\t")
+            last_state = parts[0] if len(parts) > 0 else ""
+            last_image = parts[1] if len(parts) > 1 else ""
+            print(f"Wait {app}: state={last_state} image={last_image}")
+            if last_state.lower() == "succeeded" and last_image == expected_image:
+                return
+        except subprocess.CalledProcessError:
+            pass
+        time.sleep(interval)
+    raise RuntimeError(
+        f"Timeout waiting for {app} to update to {expected_image} "
+        f"(state={last_state} image={last_image})"
+    )
 
 
 def run_health_check(name, health_cfg):
@@ -90,7 +155,7 @@ def main():
         f"Action={args.action} tag={args.tag} env={args.env} dryRun={args.dry_run}"
     )
 
-    run(["az", "acr", "login", "--name", args.acr_name], args.dry_run)
+    run_cmd(["az", "acr", "login", "--name", args.acr_name], args.dry_run)
 
     try:
         with open(args.services_file, "r", encoding="utf-8") as f:
@@ -162,7 +227,7 @@ def main():
                     file=sys.stderr,
                 )
                 print("Available tags (top 20):")
-                run(
+                run_cmd(
                     [
                         "az",
                         "acr",
@@ -190,6 +255,7 @@ def main():
 
     for name, repo, app, deploy_cfg in deploy_targets:
         env_vars = get_env_vars(deploy_cfg.get("envVars"))
+        image = f"{args.acr_login_server}/{repo}:{args.tag}"
         cmd = [
             "az",
             "containerapp",
@@ -199,13 +265,15 @@ def main():
             "--resource-group",
             args.rg,
             "--image",
-            f"{args.acr_login_server}/{repo}:{args.tag}",
+            image,
+            "--no-wait",
         ]
         if env_vars:
             cmd += ["--set-env-vars"] + env_vars
-        run(cmd, args.dry_run)
+        run_cmd(cmd, args.dry_run, retries=8, delay_seconds=20)
 
         if not args.dry_run and args.action == "deploy":
+            wait_for_update(app, args.rg, image)
             run_health_check(name, deploy_cfg.get("healthCheck"))
 
     return 0

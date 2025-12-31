@@ -11,7 +11,7 @@ declare global {
 }
 
 export async function loadAppConfig(): Promise<AppConfig> {
-  // 必须用相对路径，确保同一镜像在 test/prod 都能工作
+  // Use a relative path so the same image works in test/prod.
   if (import.meta.env.DEV) {
     const localRes = await fetch("/config/config.local.json", { cache: "no-store" });
     if (localRes.ok) {

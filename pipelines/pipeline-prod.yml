@@ -114,9 +114,10 @@ stages:
     - checkout: self
 
     - task: AzureCLI@2
-      displayName: Prune old image tags (keep 5 per repo)
+      displayName: Prune old image tags (keep 10 per repo)
       inputs:
         azureSubscription: 'sc-azure-rm'
         scriptType: 'pscore'
         scriptLocation: 'scriptPath'
         scriptPath: '$(System.DefaultWorkingDirectory)/pipelines/scripts/prune_acr_tags.ps1'
+        scriptArguments: '-Keep 10'

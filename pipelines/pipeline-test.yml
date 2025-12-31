@@ -50,6 +50,30 @@ stages:
         targetPath: image-info
         artifact: image-info
 
+    - task: AzureCLI@2
+      displayName: Tag images as 'testbed' and push
+      inputs:
+        azureSubscription: sc-azure-rm
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          echo "Tagging images as 'testbed' and pushing to ACR..."
+          tag="$(imageTag)"
+          acrServer="$(acrLoginServer)"
+
+          az acr login --name $(acrName)
+
+          for svc in $(jq -r '.services | keys[]' pipelines/services.json); do
+            repoName=$(jq -r ".services[\"$svc\"].repo" pipelines/services.json)
+            if [ -n "$repoName" ] && [ "$repoName" != "null" ]; then
+              echo "Processing $repoName"
+              docker pull "$acrServer/$repoName:$tag" || true
+              docker tag "$acrServer/$repoName:$tag" "$acrServer/$repoName:testbed"
+              docker push "$acrServer/$repoName:testbed"
+            fi
+          done
+
 # ================= DEPLOY TESTBED =================
 - stage: deploy_testbed
   displayName: Deploy to TESTBED

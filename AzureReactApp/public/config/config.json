@@ -1,5 +1,5 @@
 {
-  "API_BASE_URL": "http://localhost:8080",
-  "API2_BASE_URL": "http://localhost:8082",
-  "VITE_ENV": "Testbed"
+  "API_BASE_URL": "${API_BASE_URL}",
+  "API2_BASE_URL": "${API2_BASE_URL}",
+  "VITE_ENV": "${VITE_ENV}"
 }

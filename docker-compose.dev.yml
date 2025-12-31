@@ -26,14 +26,18 @@ services:
     working_dir: /app
     volumes:
       - ./AzureReactApp:/app:delegated
+      - web_config:/app/public/config
       - /app/node_modules
     ports:
       - "3000:3000"
     depends_on:
       - api
       - api2
+
+volumes:
+  web_config:
     environment:
       - API_BASE_URL=http://localhost:8080
       - API2_BASE_URL=http://localhost:8082
       - VITE_ENV=Testbed
-    command: sh -lc "apk add --no-cache gettext >/dev/null 2>&1 || true; cp public/config/config.json public/config/config.json.bak || true; envsubst '\$API_BASE_URL \$API2_BASE_URL \$VITE_ENV' < public/config/config.json > public/config/config.json.tmp && mv public/config/config.json.tmp public/config/config.json; trap 'mv public/config/config.json.bak public/config/config.json >/dev/null 2>&1 || true' EXIT; npm ci --no-audit --no-fund && npm run dev -- --host 0.0.0.0 --port 3000"
+    command: sh -lc "apk add --no-cache gettext >/dev/null 2>&1 || true; envsubst '\$API_BASE_URL \$API2_BASE_URL \$VITE_ENV' < /etc/app/config.template.json > /app/public/config/config.json && npm ci --no-audit --no-fund && npm run dev -- --host 0.0.0.0 --port 3000"

@@ -4,19 +4,11 @@ services:
   api-testbed:
     image: yhaodevopsacr.azurecr.io/repos-api:testbed
     container_name: api-testbed
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Testbed
-
-  api-prod:
-    image: yhaodevopsacr.azurecr.io/repos-api:prod
-    container_name: api-prod
-    restart: unless-stopped
-    ports:
-      - "8081:8080"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Production
 
   api2-testbed:
     image: yhaodevopsacr.azurecr.io/repos-api2:testbed
@@ -27,23 +19,11 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Testbed
 
-  api2-prod:
-    image: yhaodevopsacr.azurecr.io/repos-api2:prod
-    container_name: api2-prod
-    restart: unless-stopped
-    ports:
-      - "8083:8080"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Production
-
   web-testbed:
     image: yhaodevopsacr.azurecr.io/repos-web:testbed
     container_name: web-testbed
+    restart: unless-stopped
     ports:
       - "3000:80"
-
-  web-prod:
-    image: yhaodevopsacr.azurecr.io/repos-web:prod
-    container_name: web-prod
-    ports:
-      - "3001:80"
+    environment:
+      - VITE_ENV=Testbed

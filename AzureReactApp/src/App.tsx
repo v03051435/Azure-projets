@@ -72,7 +72,7 @@ function App() {
     <>
       <section>
         <section className="header">
-          <h1>Azure React App : Devops 第一终极版!!!</h1>
+          <h1> 准备开始terraform的学习!!!😄</h1>
           <p className="muted">
             OK
           </p>

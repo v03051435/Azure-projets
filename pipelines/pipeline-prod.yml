@@ -44,6 +44,25 @@ stages:
 
     - bash: |
         set -e
+        echo "Tagging images as 'prod' and pushing to ACR..."
+        tag="$(ResolvedImageTag)"
+        acrServer="$(acrLoginServer)"
+
+        az acr login --name $(acrName)
+
+        for svc in $(jq -r '.services | keys[]' pipelines/services.json); do
+          repoName=$(jq -r ".services[\"$svc\"].repo" pipelines/services.json)
+          if [ -n "$repoName" ] && [ "$repoName" != "null" ]; then
+            echo "Processing $repoName"
+            docker pull "$acrServer/$repoName:$tag" || true
+            docker tag "$acrServer/$repoName:$tag" "$acrServer/$repoName:prod"
+            docker push "$acrServer/$repoName:prod"
+          fi
+        done
+      displayName: Tag images as 'prod' and push
+
+    - bash: |
+        set -e
         git fetch --tags --prune || true
         git log -n 30 --pretty=format:"%h %s" > release-notes.txt
         echo "" >> release-notes.txt
@@ -95,9 +114,10 @@ stages:
     - checkout: self
 
     - task: AzureCLI@2
-      displayName: Prune old image tags (keep 5 per repo)
+      displayName: Prune old image tags (keep 10 per repo)
       inputs:
         azureSubscription: 'sc-azure-rm'
         scriptType: 'pscore'
         scriptLocation: 'scriptPath'
         scriptPath: '$(System.DefaultWorkingDirectory)/pipelines/scripts/prune_acr_tags.ps1'
+        scriptArguments: '-Keep 10'

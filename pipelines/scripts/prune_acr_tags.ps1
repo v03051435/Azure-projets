@@ -7,7 +7,7 @@ Prune old ACR image tags, keeping only the N most recent ones per repository.
 Name of the Azure Container Registry (default: yhaodevopsacr)
 
 .PARAMETER Keep
-Number of most recent tags to keep per repository (default: 5)
+Number of most recent tags to keep per repository (default: 10)
 
 .PARAMETER Repos
 Comma-separated list of repositories to process (default: repos-api,repos-api2,repos-web)
@@ -23,7 +23,7 @@ If set, only show what would be deleted without actually deleting
 
 param(
     [string]$AcrName = "yhaodevopsacr",
-    [int]$Keep = 5,
+    [int]$Keep = 10,
     [string]$Repos = "repos-api,repos-api2,repos-web",
     [switch]$DryRun
 )

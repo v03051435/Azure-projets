@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  api:
+    image: yhaodevopsacr.azurecr.io/repos-api:git-a1ce4ae
+    container_name: api-dev
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Testbed
+
+  api2:
+    image: yhaodevopsacr.azurecr.io/repos-api2:git-a1ce4ae
+    container_name: api2-dev
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Testbed
+
+  web:
+    image: node:20-alpine
+    container_name: web-dev
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./AzureReactApp:/app:delegated
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+      - api2
+    environment:
+      - API_BASE_URL=http://localhost:8080
+      - API2_BASE_URL=http://localhost:8082
+      - VITE_ENV=Testbed
+    command: sh -lc "apk add --no-cache gettext >/dev/null 2>&1 || true; envsubst '\$API_BASE_URL \$API2_BASE_URL \$VITE_ENV' < public/config/config.json > public/config/config.json.tmp && mv public/config/config.json.tmp public/config/config.json && npm ci --no-audit --no-fund && npm run dev -- --host 0.0.0.0 --port 3000"

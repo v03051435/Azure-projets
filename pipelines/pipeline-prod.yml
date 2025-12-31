@@ -45,9 +45,9 @@ stages:
     - bash: |
         set -euo pipefail
         echo "Tagging images as 'prod' and pushing to ACR..."
-        tag="${ResolvedImageTag:-${IMAGE_TAG:-}}"
+        tag="${RESOLVEDIMAGETAG:-${IMAGE_TAG:-}}"
         if [ -z "$tag" ]; then
-          echo "ERROR: IMAGE_TAG is not set and ResolvedImageTag is empty"
+          echo "ERROR: IMAGE_TAG and RESOLVEDIMAGETAG are both empty"
           exit 1
         fi
         acrServer="${acrLoginServer:-$ACRLOGINSERVER}"

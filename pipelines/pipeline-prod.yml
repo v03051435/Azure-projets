@@ -1,5 +1,9 @@
 trigger: none
 
+variables:
+  acrName: yhaodevopsacr
+  acrLoginServer: yhaodevopsacr.azurecr.io
+
 resources:
   pipelines:
     - pipeline: test_build
@@ -50,8 +54,12 @@ stages:
           echo "ERROR: IMAGE_TAG and RESOLVEDIMAGETAG are both empty"
           exit 1
         fi
-        acrServer="${acrLoginServer:-$ACRLOGINSERVER}"
-        acrName="${acrName:-$ACRNAME}"
+        acrServer="${acrLoginServer:-${ACRLOGINSERVER:-}}"
+        acrName="${acrName:-${ACRNAME:-}}"
+        if [ -z "$acrServer" ] || [ -z "$acrName" ]; then
+          echo "ERROR: acrLoginServer/acrName are not set"
+          exit 1
+        fi
 
         az acr login --name "${acrName}"
 

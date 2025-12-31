@@ -21,7 +21,7 @@ TODO：引导用户在本地启动项目，包括：
 3. 启动服务（dev 文件使用 `testbed` 镜像，但 web 指向本地 testbed API）：
    ```bash
    # 启动 dev 环境（使用 testbed 镜像，web 指向 localhost:8080/8082）
-   docker compose -f docker-compose.dev.yml up -d
+   docker compose -f docker-compose.dev.yml up -d api api2
 
    # 停止并移除容器
    docker compose -f docker-compose.dev.yml down

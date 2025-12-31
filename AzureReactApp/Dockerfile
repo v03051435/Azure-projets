@@ -17,6 +17,9 @@ RUN apk add --no-cache gettext
 
 COPY --from=build /app/dist /usr/share/nginx/html
 
+# Keep a template of the runtime config for envsubst (used by entrypoint and dev)
+COPY --from=build /app/public/config/config.json /etc/app/config.template.json
+
 # 确保 config 文件存在（来自 public/config/config.json）
 # dist/config/config.json
 

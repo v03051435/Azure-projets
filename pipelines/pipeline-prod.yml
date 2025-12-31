@@ -43,20 +43,34 @@ stages:
       displayName: Resolve image tag
 
     - bash: |
-        set -e
+        set -euo pipefail
         echo "Tagging images as 'prod' and pushing to ACR..."
-        tag="$(ResolvedImageTag)"
-        acrServer="$(acrLoginServer)"
+        tag="${ResolvedImageTag:-$IMAGE_TAG}"
+        acrServer="${acrLoginServer:-$ACRLOGINSERVER}"
+        acrName="${acrName:-$ACRNAME}"
 
-        az acr login --name $(acrName)
+        az acr login --name "${acrName}"
 
         for svc in $(jq -r '.services | keys[]' pipelines/services.json); do
           repoName=$(jq -r ".services[\"$svc\"].repo" pipelines/services.json)
           if [ -n "$repoName" ] && [ "$repoName" != "null" ]; then
             echo "Processing $repoName"
-            docker pull "$acrServer/$repoName:$tag" || true
-            docker tag "$acrServer/$repoName:$tag" "$acrServer/$repoName:prod"
-            docker push "$acrServer/$repoName:prod"
+
+            # Pre-flight: verify the source tag exists in ACR before pulling
+            if [ "$(az acr repository show-tags --name "${acrName}" --repository "$repoName" --query \"contains(@, '${tag}')\" -o tsv)" != "true" ]; then
+              echo "ERROR: Source tag '${tag}' not found in repository '${repoName}' in ACR '${acrName}'"
+              exit 1
+            fi
+
+            docker pull "${acrServer}/${repoName}:${tag}"
+            docker tag "${acrServer}/${repoName}:${tag}" "${acrServer}/${repoName}:prod"
+            docker push "${acrServer}/${repoName}:prod"
+
+            # Verify the 'prod' tag exists in ACR for this repository
+            if [ "$(az acr repository show-tags --name "${acrName}" --repository "$repoName" --query \"contains(@, 'prod')\" -o tsv)" != "true" ]; then
+              echo "ERROR: 'prod' tag not found for $repoName after push"
+              exit 1
+            fi
           fi
         done
       displayName: Tag images as 'prod' and push

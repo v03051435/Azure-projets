@@ -73,7 +73,8 @@ stages:
               echo "Processing $repoName"
 
               # Pre-flight: verify the source tag exists in ACR before pulling
-              if [ "$(az acr repository show-tags --name "${acrName}" --repository "$repoName" --query \"contains(@, '${tag}')\" -o tsv)" != "true" ]; then
+              query="contains(@, '${tag}')"
+              if [ "$(az acr repository show-tags --name "${acrName}" --repository "$repoName" --query "$query" -o tsv)" != "true" ]; then
                 echo "ERROR: Source tag '${tag}' not found in repository '${repoName}' in ACR '${acrName}'"
                 exit 1
               fi
@@ -83,7 +84,8 @@ stages:
               docker push "${acrServer}/${repoName}:testbed"
 
               # Verify the 'testbed' tag exists in ACR for this repository
-              if [ "$(az acr repository show-tags --name "${acrName}" --repository "$repoName" --query \"contains(@, 'testbed')\" -o tsv)" != "true" ]; then
+              query="contains(@, 'testbed')"
+              if [ "$(az acr repository show-tags --name "${acrName}" --repository "$repoName" --query "$query" -o tsv)" != "true" ]; then
                 echo "ERROR: 'testbed' tag not found for $repoName after push"
                 exit 1
               fi

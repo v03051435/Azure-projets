@@ -68,9 +68,15 @@ stages:
             repoName=$(jq -r ".services[\"$svc\"].repo" pipelines/services.json)
             if [ -n "$repoName" ] && [ "$repoName" != "null" ]; then
               echo "Processing $repoName"
-              docker pull "$acrServer/$repoName:$tag" || true
+              docker pull "$acrServer/$repoName:$tag"
               docker tag "$acrServer/$repoName:$tag" "$acrServer/$repoName:testbed"
               docker push "$acrServer/$repoName:testbed"
+
+              # Verify the 'testbed' tag exists in ACR for this repository
+              if [ "$(az acr repository show-tags --name $(acrName) --repository $repoName --query \"contains(@, 'testbed')\" -o tsv)" != "true" ]; then
+                echo "ERROR: 'testbed' tag not found for $repoName after push"
+                exit 1
+              fi
             fi
           done
 

@@ -12,6 +12,14 @@ declare global {
 
 export async function loadAppConfig(): Promise<AppConfig> {
   // 必须用相对路径，确保同一镜像在 test/prod 都能工作
+  if (import.meta.env.DEV) {
+    const localRes = await fetch("/config/config.local.json", { cache: "no-store" });
+    if (localRes.ok) {
+      const localCfg = (await localRes.json()) as AppConfig;
+      window.__APP_CONFIG__ = localCfg;
+      return localCfg;
+    }
+  }
   const res = await fetch("/config/config.json", { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`Failed to load /config/config.json (${res.status})`);

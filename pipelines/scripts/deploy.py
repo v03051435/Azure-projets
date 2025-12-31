@@ -176,9 +176,7 @@ def main():
 
     for name, repo, app, deploy_cfg in deploy_targets:
         image = f"{args.acr_login_server}/{repo}:{args.tag}"
-        env_vars = (
-            get_env_vars(deploy_cfg.get("envVars")) if name == "web" else []
-        )
+        env_vars = get_env_vars(deploy_cfg.get("envVars"))
         cmd = [
             "az",
             "containerapp",

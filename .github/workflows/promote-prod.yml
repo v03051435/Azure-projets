@@ -5,7 +5,7 @@ on:
     inputs:
       imageTag:
         description: Image tag to promote (e.g., git-abcdef1)
-        required: true
+        required: false
         type: string
 
 permissions:
@@ -26,14 +26,24 @@ jobs:
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
+      - name: Resolve image tag
+        id: resolve_tag
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.imageTag }}" ]; then
+            echo "image_tag=${{ inputs.imageTag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "image_tag=testbed" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Tag images as prod
         run: |
           set -euo pipefail
           for svc in $(jq -r '.services | keys[]' pipelines/services.json); do
             repo=$(jq -r ".services[\"$svc\"].repo" pipelines/services.json)
             image="${REGISTRY_SERVER}/${repo}"
-            docker pull "${image}:${{ inputs.imageTag }}"
-            docker tag "${image}:${{ inputs.imageTag }}" "${image}:prod"
+            docker pull "${image}:${{ steps.resolve_tag.outputs.image_tag }}"
+            docker tag "${image}:${{ steps.resolve_tag.outputs.image_tag }}" "${image}:prod"
             docker push "${image}:prod"
           done
 
@@ -46,7 +56,7 @@ jobs:
         run: |
           python pipelines/scripts/deploy.py \
             --action deploy \
-            --tag "${{ inputs.imageTag }}" \
+            --tag "${{ steps.resolve_tag.outputs.image_tag }}" \
             --registry-server "${REGISTRY_SERVER}" \
             --registry-username "${{ github.actor }}" \
             --registry-password "${{ secrets.GITHUB_TOKEN }}" \

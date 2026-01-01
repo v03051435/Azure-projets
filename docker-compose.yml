@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   api-testbed:
-    image: yhaodevopsacr.azurecr.io/repos-api:testbed
+    image: ghcr.io/v03051435/repos-api:testbed
     container_name: api-testbed
     ports:
       - "8080:8080"
@@ -10,7 +10,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Testbed
 
   api-prod:
-    image: yhaodevopsacr.azurecr.io/repos-api:prod
+    image: ghcr.io/v03051435/repos-api:prod
     container_name: api-prod
     restart: unless-stopped
     ports:
@@ -19,7 +19,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
 
   api2-testbed:
-    image: yhaodevopsacr.azurecr.io/repos-api2:testbed
+    image: ghcr.io/v03051435/repos-api2:testbed
     container_name: api2-testbed
     restart: unless-stopped
     ports:
@@ -28,7 +28,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Testbed
 
   api2-prod:
-    image: yhaodevopsacr.azurecr.io/repos-api2:prod
+    image: ghcr.io/v03051435/repos-api2:prod
     container_name: api2-prod
     restart: unless-stopped
     ports:
@@ -37,13 +37,13 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
 
   web-testbed:
-    image: yhaodevopsacr.azurecr.io/repos-web:testbed
+    image: ghcr.io/v03051435/repos-web:testbed
     container_name: web-testbed
     ports:
       - "3000:80"
 
   web-prod:
-    image: yhaodevopsacr.azurecr.io/repos-web:prod
+    image: ghcr.io/v03051435/repos-web:prod
     container_name: web-prod
     ports:
       - "3001:80"

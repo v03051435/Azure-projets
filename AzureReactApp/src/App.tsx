@@ -91,7 +91,7 @@ function App() {
         <header className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-2xl">
             <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
-              Repos Observability Console
+              Repos Observability Console!!!
             </p>
             <h1 className="font-display mt-4 text-4xl font-semibold text-slate-900 sm:text-5xl">
               Unified frontend view for two service APIs.

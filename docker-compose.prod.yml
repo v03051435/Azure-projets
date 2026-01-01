@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   api-prod:
-    image: yhaodevopsacr.azurecr.io/repos-api:prod
+    image: ghcr.io/v03051435/repos-api:prod
     container_name: api-prod
     restart: unless-stopped
     ports:
@@ -11,7 +11,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
 
   api2-prod:
-    image: yhaodevopsacr.azurecr.io/repos-api2:prod
+    image: ghcr.io/v03051435/repos-api2:prod
     container_name: api2-prod
     restart: unless-stopped
     ports:
@@ -20,7 +20,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
 
   web-prod:
-    image: yhaodevopsacr.azurecr.io/repos-web:prod
+    image: ghcr.io/v03051435/repos-web:prod
     container_name: web-prod
     restart: unless-stopped
     ports:

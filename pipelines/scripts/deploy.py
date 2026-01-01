@@ -114,8 +114,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--action", default="deploy")
     parser.add_argument("--tag", required=True)
-    parser.add_argument("--acr-name", required=True)
-    parser.add_argument("--acr-login-server", required=True)
+    parser.add_argument("--registry-server", "--acr-login-server", dest="registry_server", required=True)
+    parser.add_argument("--acr-name", default="")
+    parser.add_argument("--registry-username", default="")
+    parser.add_argument("--registry-password", default="")
     parser.add_argument("--rg", required=True)
     parser.add_argument("--env", required=True)
     parser.add_argument("--services-file", required=True)
@@ -126,7 +128,8 @@ def main():
         f"Action={args.action} tag={args.tag} env={args.env} dryRun={args.dry_run}"
     )
 
-    run_cmd(["az", "acr", "login", "--name", args.acr_name], args.dry_run)
+    if args.acr_name:
+        run_cmd(["az", "acr", "login", "--name", args.acr_name], args.dry_run)
 
     try:
         with open(args.services_file, "r", encoding="utf-8") as f:
@@ -174,8 +177,10 @@ def main():
 
         deploy_targets.append((name, repo, app, deploy_cfg))
 
+    registry_host = args.registry_server.split("/")[0]
+
     for name, repo, app, deploy_cfg in deploy_targets:
-        image = f"{args.acr_login_server}/{repo}:{args.tag}"
+        image = f"{args.registry_server}/{repo}:{args.tag}"
         env_vars = get_env_vars(deploy_cfg.get("envVars"))
         cmd = [
             "az",
@@ -189,6 +194,26 @@ def main():
             image,
             "--no-wait",
         ]
+        if args.registry_username and args.registry_password:
+            run_cmd(
+                [
+                    "az",
+                    "containerapp",
+                    "registry",
+                    "set",
+                    "--name",
+                    app,
+                    "--resource-group",
+                    args.rg,
+                    "--server",
+                    registry_host,
+                    "--username",
+                    args.registry_username,
+                    "--password",
+                    args.registry_password,
+                ],
+                args.dry_run,
+            )
         if env_vars:
             cmd += ["--set-env-vars"] + env_vars
         try:

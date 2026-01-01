@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   api:
-    image: yhaodevopsacr.azurecr.io/repos-api:testbed
+    image: ghcr.io/v03051435/repos-api:testbed
     container_name: api-dev
     restart: unless-stopped
     ports:
@@ -11,7 +11,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Testbed
 
   api2:
-    image: yhaodevopsacr.azurecr.io/repos-api2:testbed
+    image: ghcr.io/v03051435/repos-api2:testbed
     container_name: api2-dev
     restart: unless-stopped
     ports:

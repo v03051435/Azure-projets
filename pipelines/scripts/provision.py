@@ -182,8 +182,10 @@ def ensure_acr_pull(principal_id, acr_id, dry_run):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--tag", required=True)
-    parser.add_argument("--acr-name", required=True)
-    parser.add_argument("--acr-login-server", required=True)
+    parser.add_argument("--registry-server", "--acr-login-server", dest="registry_server", required=True)
+    parser.add_argument("--acr-name", default="")
+    parser.add_argument("--registry-username", default="")
+    parser.add_argument("--registry-password", default="")
     parser.add_argument("--rg", required=True)
     parser.add_argument("--env", required=True)
     parser.add_argument("--services-file", required=True)
@@ -258,16 +260,19 @@ def main():
     if not to_create:
         print("No new Container Apps to create.")
 
-    acr_id = get_acr_id(args.acr_name, args.dry_run)
-    if not args.dry_run and not acr_id:
-        print(
-            "ERROR: Unable to resolve ACR resource id.",
-            file=sys.stderr,
-        )
-        return 1
+    acr_id = ""
+    if args.acr_name:
+        acr_id = get_acr_id(args.acr_name, args.dry_run)
+        if not args.dry_run and not acr_id:
+            print(
+                "ERROR: Unable to resolve ACR resource id.",
+                file=sys.stderr,
+            )
+            return 1
 
     for name, repo, app, deploy_cfg in to_create:
         env_vars = get_env_vars(deploy_cfg.get("envVars"))
+        registry_host = args.registry_server.split("/")[0]
         cmd = [
             "az",
             "containerapp",
@@ -279,19 +284,31 @@ def main():
             "--environment",
             env_name,
             "--image",
-            f"{args.acr_login_server}/{repo}:{args.tag}",
+            f"{args.registry_server}/{repo}:{args.tag}",
             "--ingress",
             "external",
             "--target-port",
             "8080",
             "--revisions-mode",
             "single",
-            "--registry-server",
-            args.acr_login_server,
-            "--registry-identity",
-            "system",
             "--system-assigned",
         ]
+        if args.registry_username and args.registry_password:
+            cmd += [
+                "--registry-server",
+                registry_host,
+                "--registry-username",
+                args.registry_username,
+                "--registry-password",
+                args.registry_password,
+            ]
+        else:
+            cmd += [
+                "--registry-server",
+                args.registry_server,
+                "--registry-identity",
+                "system",
+            ]
         if env_vars:
             cmd += ["--env-vars"] + env_vars
         print(f"Creating {name} -> {app}")
@@ -300,11 +317,12 @@ def main():
     for name, repo, app, deploy_cfg in to_create:
         if args.dry_run:
             continue
-        ensure_identity(app, args.rg, args.dry_run)
-        ensure_registry_identity(app, args.rg, args.acr_login_server, args.dry_run)
-        principal_id = get_principal_id(app, args.rg, args.dry_run)
-        if principal_id:
-            ensure_acr_pull(principal_id, acr_id, args.dry_run)
+        if not (args.registry_username and args.registry_password):
+            ensure_identity(app, args.rg, args.dry_run)
+            ensure_registry_identity(app, args.rg, args.registry_server.split("/")[0], args.dry_run)
+            principal_id = get_principal_id(app, args.rg, args.dry_run)
+            if principal_id and acr_id:
+                ensure_acr_pull(principal_id, acr_id, args.dry_run)
 
     return 0
 

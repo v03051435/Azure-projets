@@ -1,0 +1,55 @@
+name: Promote Prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      imageTag:
+        description: Image tag to promote (e.g., git-abcdef1)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY_SERVER: ghcr.io/v03051435
+  RG_NAME: rg-devops-demo
+
+jobs:
+  promote_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Tag images as prod
+        run: |
+          set -euo pipefail
+          for svc in $(jq -r '.services | keys[]' pipelines/services.json); do
+            repo=$(jq -r ".services[\"$svc\"].repo" pipelines/services.json)
+            image="${REGISTRY_SERVER}/${repo}"
+            docker pull "${image}:${{ inputs.imageTag }}"
+            docker tag "${image}:${{ inputs.imageTag }}" "${image}:prod"
+            docker push "${image}:prod"
+          done
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to prod
+        run: |
+          python pipelines/scripts/deploy.py \
+            --action deploy \
+            --tag "${{ inputs.imageTag }}" \
+            --registry-server "${REGISTRY_SERVER}" \
+            --registry-username "${{ github.actor }}" \
+            --registry-password "${{ secrets.GITHUB_TOKEN }}" \
+            --rg "${RG_NAME}" \
+            --env prod \
+            --services-file "pipelines/services.json"

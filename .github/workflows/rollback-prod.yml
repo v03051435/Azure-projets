@@ -1,0 +1,41 @@
+name: Rollback Prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      imageTag:
+        description: Image tag to rollback to (e.g., git-abcdef1)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  REGISTRY_SERVER: ghcr.io/v03051435
+  RG_NAME: rg-devops-demo
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Rollback prod
+        run: |
+          python pipelines/scripts/deploy.py \
+            --action rollback \
+            --tag "${{ inputs.imageTag }}" \
+            --registry-server "${REGISTRY_SERVER}" \
+            --registry-username "${{ github.actor }}" \
+            --registry-password "${{ secrets.GITHUB_TOKEN }}" \
+            --rg "${RG_NAME}" \
+            --env prod \
+            --services-file "pipelines/services.json"

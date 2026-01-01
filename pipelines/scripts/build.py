@@ -8,8 +8,10 @@ import sys
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--tag", required=True)
-    parser.add_argument("--acr-name", required=True)
-    parser.add_argument("--acr-login-server", required=True)
+    parser.add_argument("--registry-server", "--acr-login-server", dest="registry_server", required=True)
+    parser.add_argument("--acr-name", default="")
+    parser.add_argument("--registry-username", default="")
+    parser.add_argument("--registry-password", default="")
     parser.add_argument("--services-file", required=True)
     args = parser.parse_args()
 
@@ -28,9 +30,18 @@ def main():
         print("No services found to build.")
         return 0
 
-    subprocess.run(
-        ["az", "acr", "login", "--name", args.acr_name], check=True
-    )
+    registry_host = args.registry_server.split("/")[0]
+    if args.registry_username and args.registry_password:
+        subprocess.run(
+            ["docker", "login", registry_host, "-u", args.registry_username, "--password-stdin"],
+            input=args.registry_password,
+            text=True,
+            check=True,
+        )
+    elif args.acr_name:
+        subprocess.run(
+            ["az", "acr", "login", "--name", args.acr_name], check=True
+        )
 
     for name, svc in services.items():
         repo = (svc.get("repo") or "").strip()
@@ -45,7 +56,7 @@ def main():
             print(f"Skipping build for {name} (missing repo/path)")
             continue
 
-        image = f"{args.acr_login_server}/{repo}:{args.tag}"
+        image = f"{args.registry_server}/{repo}:{args.tag}"
         print(f"Building {name} ({repo}) from {path}")
         subprocess.run(["docker", "build", "-t", image, path], check=True)
         subprocess.run(["docker", "push", image], check=True)

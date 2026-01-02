@@ -272,6 +272,7 @@ def main():
 
     for name, repo, app, deploy_cfg in to_create:
         env_vars = get_env_vars(deploy_cfg.get("envVars"))
+        target_port = deploy_cfg.get("targetPort") or 8080
         registry_host = args.registry_server.split("/")[0]
         cmd = [
             "az",
@@ -288,7 +289,7 @@ def main():
             "--ingress",
             "external",
             "--target-port",
-            "8080",
+            str(target_port),
             "--revisions-mode",
             "single",
             "--system-assigned",

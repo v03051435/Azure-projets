@@ -341,3 +341,9 @@ healthchecksdb
 .env
 AzureReactApp/public/config/config.local.json
 infra/environments/*.auto.tfvars
+
+infra/.terraform/
+infra/.terraform.lock.hcl
+infra/*.tfstate
+infra/*.tfstate.*
+infra/terraform.tfstate.d/

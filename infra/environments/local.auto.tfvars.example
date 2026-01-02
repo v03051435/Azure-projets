@@ -1,0 +1,3 @@
+registry_username = "v03051435"
+registry_password = "<ghcr-token>"
+image_tag         = "<image-tag>"

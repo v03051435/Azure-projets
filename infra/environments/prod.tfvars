@@ -1,0 +1,12 @@
+subscription_id              = "d4d8caee-2fad-47b0-8c08-a00b5f7b693f"
+resource_group_name          = "rg-devops-prod"
+env_resource_group_name      = "rg-devops-testbed"
+create_shared_resources      = false
+location                     = "France Central"
+container_app_environment_name = "cae-devops-testbed"
+env                          = "prod"
+registry_server              = "ghcr.io/v03051435"
+registry_host                = "ghcr.io"
+registry_username            = "v03051435"
+image_tag                    = "prod"
+log_analytics_workspace_name = "workspacergdevopstestbed"

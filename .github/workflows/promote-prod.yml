@@ -14,7 +14,7 @@ permissions:
 
 env:
   REGISTRY_SERVER: ghcr.io/v03051435
-  RG_NAME: rg-devops-demo
+  RG_NAME: rg-devops-prod
 
 jobs:
   promote_deploy:

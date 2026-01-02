@@ -94,7 +94,7 @@ function App() {
               Repos Observability Console!!!
             </p>
             <h1 className="font-display mt-4 text-4xl font-semibold text-slate-900 sm:text-5xl">
-              Unified frontend view for two service APIs : Github registry
+              Unified frontend view for two service APIs : Terraform & GHCR
             </h1>
             <p className="mt-4 text-base text-slate-600">
               This dashboard keeps the UI lightweight while streaming data from both backend

@@ -52,6 +52,18 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Provision container apps (if missing)
+        run: |
+          python pipelines/scripts/provision.py \
+            --tag "${{ steps.resolve_tag.outputs.image_tag }}" \
+            --registry-server "${REGISTRY_SERVER}" \
+            --registry-username "${{ github.actor }}" \
+            --registry-password "${{ secrets.GITHUB_TOKEN }}" \
+            --rg "${RG_NAME}" \
+            --env prod \
+            --services-file "pipelines/services.json" \
+            --env-name "cae-devops-testbed"
+
       - name: Deploy to prod
         run: |
           python pipelines/scripts/deploy.py \

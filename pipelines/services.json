@@ -76,6 +76,7 @@
         "testbed": {
           "appName": "demo-web-testbed",
           "envVars": "API_BASE_URL=https://demo-api-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io API2_BASE_URL=https://demo-api2-testbed.livelyrock-263dd733.francecentral.azurecontainerapps.io VITE_ENV=Testbed",
+          "targetPort": 80,
           "skip": false,
           "healthCheck": {
             "skip": true,
@@ -88,6 +89,7 @@
         "prod": {
           "appName": "demo-web-prod",
           "envVars": "API_BASE_URL=https://demo-api-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io API2_BASE_URL=https://demo-api2-prod.livelyrock-263dd733.francecentral.azurecontainerapps.io VITE_ENV=Production",
+          "targetPort": 80,
           "skip": false,
           "healthCheck": {
             "skip": true,

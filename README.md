@@ -12,12 +12,12 @@ TODO：引导用户在本地启动项目，包括：
 按以下步骤在本地运行 **testbed** 环境的服务：
 
 1. 确保 Docker 正在运行。
-2. （如果镜像是私有的）登录 ACR 并拉取镜像：
+2. （如果镜像是私有的）登录 GHCR 并拉取镜像：
    ```bash
-   az login
-   az acr login --name yhaodevopsacr
+   docker login ghcr.io -u <github-username> -p <github-pat>
    docker compose -f docker-compose.dev.yml pull
    ```
+   备注：`<github-pat>` 需要包含 `read:packages` 权限。
 3. 启动服务（dev 文件使用 `testbed` 镜像，但 web 指向本地 testbed API）：
    ```bash
    # 启动 dev 环境（使用 testbed 镜像，web 指向 localhost:8080/8082）
@@ -42,20 +42,20 @@ TODO：引导用户在本地启动项目，包括：
   - 若需临时使用远端最新镜像进行测试，可以创建临时 override 并传给 `docker compose`：
 
     ```powershell
-    # 拉取最新 tag（示例）并生成临时 override
-    $tag_api=(az acr repository show-tags --name yhaodevopsacr --repository repos-api --orderby time_desc --top 1 --output tsv).Trim()
-    $tag_api2=(az acr repository show-tags --name yhaodevopsacr --repository repos-api2 --orderby time_desc --top 1 --output tsv).Trim()
-    $tag_web=(az acr repository show-tags --name yhaodevopsacr --repository repos-web --orderby time_desc --top 1 --output tsv).Trim()
+    # 指定要测试的 tag（示例：testbed 或 git-abcdef1）并生成临时 override
+    $tag_api="testbed"
+    $tag_api2="testbed"
+    $tag_web="testbed"
 
     @"
     version: '3.9'
     services:
       api-testbed:
-        image: yhaodevopsacr.azurecr.io/repos-api:$tag_api
+        image: ghcr.io/v03051435/repos-api:$tag_api
       api2-testbed:
-        image: yhaodevopsacr.azurecr.io/repos-api2:$tag_api2
+        image: ghcr.io/v03051435/repos-api2:$tag_api2
       web-testbed:
-        image: yhaodevopsacr.azurecr.io/repos-web:$tag_web
+        image: ghcr.io/v03051435/repos-web:$tag_web
     "@ | Out-File -FilePath docker-compose.local-override.yml -Encoding utf8
 
     docker compose -f docker-compose.testbed.yml -f docker-compose.local-override.yml pull

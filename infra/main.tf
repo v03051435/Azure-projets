@@ -77,75 +77,28 @@ locals {
 }
 
 locals {
-  services = {
-    api = {
-      repo = "repos-api"
-      deploy = {
-        testbed = {
-          app_name    = "demo-api-testbed"
-          env_vars    = ["ASPNETCORE_ENVIRONMENT=Testbed"]
-          target_port = 8080
-        }
-        prod = {
-          app_name    = "demo-api-prod"
-          env_vars    = ["ASPNETCORE_ENVIRONMENT=Production"]
-          target_port = 8080
-        }
-      }
-    }
-    api2 = {
-      repo = "repos-api2"
-      deploy = {
-        testbed = {
-          app_name    = "demo-api2-testbed"
-          env_vars    = ["ASPNETCORE_ENVIRONMENT=Testbed"]
-          target_port = 8080
-        }
-        prod = {
-          app_name    = "demo-api2-prod"
-          env_vars    = ["ASPNETCORE_ENVIRONMENT=Production"]
-          target_port = 8080
-        }
-      }
-    }
-    web = {
-      repo = "repos-web"
-      deploy = {
-        testbed = {
-          app_name = "demo-web-testbed"
-          env_vars = [
-            "API_BASE_URL=https://demo-api-testbed.calmocean-cd5e9200.francecentral.azurecontainerapps.io",
-            "API2_BASE_URL=https://demo-api2-testbed.calmocean-cd5e9200.francecentral.azurecontainerapps.io",
-            "VITE_ENV=Testbed",
-          ]
-          target_port = 80
-        }
-        prod = {
-          app_name = "demo-web-prod"
-          env_vars = [
-            "API_BASE_URL=https://demo-api-prod.calmocean-cd5e9200.francecentral.azurecontainerapps.io",
-            "API2_BASE_URL=https://demo-api2-prod.calmocean-cd5e9200.francecentral.azurecontainerapps.io",
-            "VITE_ENV=Production",
-          ]
-          target_port = 80
-        }
-      }
-    }
-  }
+  services_json = jsondecode(file("${path.module}/../pipelines/services.json"))
+  services      = try(local.services_json.services, {})
 
   env_services = {
     for name, svc in local.services : name => {
-      repo           = svc.repo
-      app_name       = svc.deploy[var.env].app_name
-      container_name = svc.deploy[var.env].app_name
-      target_port    = try(svc.deploy[var.env].target_port, 8080)
+      repo           = try(svc.repo, "")
+      app_name       = try(svc.deploy[var.env].appName, "")
+      container_name = try(svc.deploy[var.env].appName, "")
+      target_port    = try(svc.deploy[var.env].targetPort, 8080)
       env_list = [
-        for pair in svc.deploy[var.env].env_vars : {
+        for pair in try(svc.deploy[var.env].envVars, []) : {
           name  = split("=", pair)[0]
           value = join("=", slice(split("=", pair), 1, length(split("=", pair))))
-        }
+        } if trimspace(pair) != ""
       ]
     }
+    if(
+      try(svc.skip, false) == false &&
+      try(svc.deploy[var.env].skip, false) == false &&
+      try(svc.deploy[var.env].appName, "") != "" &&
+      try(svc.repo, "") != ""
+    )
   }
 }
 

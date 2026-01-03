@@ -53,7 +53,8 @@ variable "registry_password" {
 }
 
 variable "image_tag" {
-  type = string
+  type    = string
+  default = "testbed"
 }
 
 variable "workload_profile_name" {

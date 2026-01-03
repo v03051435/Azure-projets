@@ -1,34 +1,11 @@
 #!/usr/bin/env python3
 import argparse
 import json
-import shlex
 import subprocess
 import sys
 import time
 
-
-def parse_bool(val):
-    if isinstance(val, bool):
-        return val
-    if val is None:
-        return False
-    return str(val).strip().lower() in ("1", "true", "yes", "y", "on")
-
-
-def join_cmd(cmd):
-    try:
-        return shlex.join(cmd)
-    except AttributeError:
-        return " ".join(shlex.quote(c) for c in cmd)
-
-
-def get_env_vars(env_vars):
-    if not env_vars:
-        return []
-    if isinstance(env_vars, list):
-        return env_vars
-    return shlex.split(str(env_vars))
-
+from utils import get_env_vars, join_cmd, parse_bool
 
 def run_cmd(cmd, dry_run, retries=0, delay_seconds=20):
     print(f"CMD: {join_cmd(cmd)}")

@@ -1,49 +1,29 @@
 version: "3.9"
 
 services:
-  api-testbed:
-    image: ghcr.io/v03051435/repos-api:testbed
-    container_name: api-testbed
-    ports:
-      - "8080:8080"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Testbed
-
-  api-prod:
-    image: ghcr.io/v03051435/repos-api:prod
-    container_name: api-prod
+  api:
+    image: ghcr.io/v03051435/repos-api:${IMAGE_TAG:-testbed}
+    container_name: api-${ENV_NAME:-testbed}
     restart: unless-stopped
     ports:
-      - "8081:8080"
+      - "${API_HOST_PORT:-8080}:8080"
     environment:
-      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Testbed}
 
-  api2-testbed:
-    image: ghcr.io/v03051435/repos-api2:testbed
-    container_name: api2-testbed
+  api2:
+    image: ghcr.io/v03051435/repos-api2:${IMAGE_TAG:-testbed}
+    container_name: api2-${ENV_NAME:-testbed}
     restart: unless-stopped
     ports:
-      - "8082:8080"
+      - "${API2_HOST_PORT:-8082}:8080"
     environment:
-      ASPNETCORE_ENVIRONMENT: Testbed
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Testbed}
 
-  api2-prod:
-    image: ghcr.io/v03051435/repos-api2:prod
-    container_name: api2-prod
+  web:
+    image: ghcr.io/v03051435/repos-web:${IMAGE_TAG:-testbed}
+    container_name: web-${ENV_NAME:-testbed}
     restart: unless-stopped
     ports:
-      - "8083:8080"
+      - "${WEB_HOST_PORT:-3000}:80"
     environment:
-      ASPNETCORE_ENVIRONMENT: Production
-
-  web-testbed:
-    image: ghcr.io/v03051435/repos-web:testbed
-    container_name: web-testbed
-    ports:
-      - "3000:80"
-
-  web-prod:
-    image: ghcr.io/v03051435/repos-web:prod
-    container_name: web-prod
-    ports:
-      - "3001:80"
+      VITE_ENV: ${VITE_ENV:-Testbed}

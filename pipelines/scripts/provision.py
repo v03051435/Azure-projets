@@ -2,25 +2,10 @@
 import argparse
 import json
 import re
-import shlex
 import subprocess
 import sys
 
-
-def parse_bool(val):
-    if isinstance(val, bool):
-        return val
-    if val is None:
-        return False
-    return str(val).strip().lower() in ("1", "true", "yes", "y", "on")
-
-
-def join_cmd(cmd):
-    try:
-        return shlex.join(cmd)
-    except AttributeError:
-        return " ".join(shlex.quote(c) for c in cmd)
-
+from utils import get_env_vars, join_cmd, parse_bool
 
 def run(cmd, dry_run):
     print(f"CMD: {join_cmd(cmd)}")
@@ -34,14 +19,6 @@ def run_capture(cmd, dry_run):
     if dry_run:
         return ""
     return subprocess.check_output(cmd, text=True).strip()
-
-
-def get_env_vars(env_vars):
-    if not env_vars:
-        return []
-    if isinstance(env_vars, list):
-        return env_vars
-    return shlex.split(str(env_vars))
 
 
 def env_name_from_id(env_id):
